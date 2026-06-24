@@ -61,7 +61,7 @@ class GestureRecognizer:
         HandLandmarker = mp.tasks.vision.HandLandmarker
         HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
 
-        hand_model_path = "./hand_landmarker.task"
+        hand_model_path = str(Path(__file__).parent / "hand_landmarker.task")
         hand_options = HandLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=hand_model_path),
             num_hands=2
@@ -72,7 +72,7 @@ class GestureRecognizer:
         FaceLandmarker = mp.tasks.vision.FaceLandmarker
         FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
 
-        face_model_path = "./face_landmarker.task"
+        face_model_path = str(Path(__file__).parent / "face_landmarker.task")
         face_options = FaceLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=face_model_path),
             num_faces=1
