@@ -37,7 +37,13 @@ function ClawSidebar() {
   const [open, setOpen] = useState(true);
   const sessionApi = useClawSessions();
 
-  const newSession = () => window.dispatchEvent(new CustomEvent("claw:new-session"));
+  const newSession = () => {
+    if (sessionApi?.newSession) {
+      void sessionApi.newSession();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("claw:new-session"));
+  };
 
   if (!open) {
     return (

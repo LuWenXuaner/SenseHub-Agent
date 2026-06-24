@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -12,12 +13,72 @@ import pyautogui
 import pyperclip
 
 pyautogui.FAILSAFE = True
-pyautogui.PAUSE = 0.2
+pyautogui.PAUSE = 0.05
+
+_VK = {
+    "ctrl": 0x11,
+    "control": 0x11,
+    "shift": 0x10,
+    "alt": 0x12,
+    "enter": 0x0D,
+    "return": 0x0D,
+    "tab": 0x09,
+    "f4": 0x73,
+    "esc": 0x1B,
+    "escape": 0x1B,
+}
+
+
+def _hotkey_vks(*vk_codes: int) -> None:
+    """Win32 keybd_event 组合键，比 pyautogui 更可靠地发到前台窗口."""
+    import win32api
+    import win32con
+
+    for vk in vk_codes:
+        win32api.keybd_event(vk, 0, 0, 0)
+    for vk in reversed(vk_codes):
+        win32api.keybd_event(vk, 0, win32con.KEYEVENTF_KEYUP, 0)
+    time.sleep(0.04)
+
+
+def _hotkey_names(*names: str) -> None:
+    vks: list[int] = []
+    for name in names:
+        key = str(name).strip().lower()
+        if key in _VK:
+            vks.append(_VK[key])
+        elif len(key) == 1:
+            vks.append(ord(key.upper()))
+        else:
+            raise ValueError(f"不支持的按键: {name}")
+    _hotkey_vks(*vks)
+
+
+def _press_vk(vk: int) -> None:
+    import win32api
+    import win32con
+
+    win32api.keybd_event(vk, 0, 0, 0)
+    win32api.keybd_event(vk, 0, win32con.KEYEVENTF_KEYUP, 0)
+    time.sleep(0.04)
 
 _NOTEPAD_TITLES = ("记事本", "Notepad", "无标题", "Untitled")
 
-# 次级窗口（登录/扫码等）标题常见片段，聚焦时优先跳过
-_LOGIN_TITLE_HINTS = ("登录", "login", "sign in", "扫码", "scan", "qrcode", "qr code", "授权")
+# 次级窗口（登录/扫码等）标题常见片段，聚焦时优先跳过（避免过宽词如「授权」误伤主窗口）
+_LOGIN_TITLE_HINTS = (
+    "登录",
+    "login",
+    "sign in",
+    "sign-in",
+    "扫码",
+    "scan qr",
+    "qrcode",
+    "qr code",
+    "请登录",
+    "账号登录",
+    "微信登录",
+    "qq登录",
+)
 
 APP_MAP = {
     "notepad": "notepad",
@@ -31,6 +92,28 @@ APP_MAP = {
     "explorer": "explorer",
     "资源管理器": "explorer",
     "文件管理器": "explorer",
+}
+
+# 内置应用对应进程名（标题为联系人名等时仍能识别已打开实例）
+APP_PROCESS_IMAGES: dict[str, tuple[str, ...]] = {
+    "notepad": ("notepad.exe",),
+    "记事本": ("notepad.exe",),
+    "calc": ("calculatorapp.exe", "calculator.exe", "win32calc.exe"),
+    "计算器": ("calculatorapp.exe", "calculator.exe", "win32calc.exe"),
+    "chrome": ("chrome.exe",),
+    "浏览器": ("chrome.exe", "msedge.exe"),
+    "edge": ("msedge.exe",),
+    "msedge": ("msedge.exe",),
+    "explorer": ("explorer.exe",),
+    "资源管理器": ("explorer.exe",),
+    "文件管理器": ("explorer.exe",),
+    "wechat": ("weixin.exe", "wechat.exe"),
+    "微信": ("weixin.exe", "wechat.exe"),
+    "qq": ("qq.exe",),
+    "钉钉": ("dingtalk.exe",),
+    "dingtalk": ("dingtalk.exe",),
+    "飞书": ("feishu.exe",),
+    "feishu": ("feishu.exe",),
 }
 
 _TITLE_ALIASES: dict[str, tuple[str, ...]] = {
@@ -61,6 +144,14 @@ _EXE_SEARCH_ROOTS = (
     lambda: Path(os.environ.get("LOCALAPPDATA", "")),
     lambda: Path(os.environ.get("APPDATA", "")),
 )
+
+
+def _clamp_wait(value: Any, *, default: float, min_v: float = 0.0, max_v: float = 20.0) -> float:
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(min_v, min(max_v, num))
 
 
 def _title_keywords(name: str) -> tuple[str, ...]:
@@ -158,12 +249,57 @@ def _get_process_image_name(pid: int) -> str:
     return ""
 
 
+def _pids_for_process_images(image_names: tuple[str, ...]) -> set[int]:
+    """进程快照查 PID，避免 EnumWindows 时对每个窗口 OpenProcess."""
+    targets = {name.lower() for name in image_names if name}
+    if not targets:
+        return set()
+
+    import ctypes
+    from ctypes import wintypes
+
+    TH32CS_SNAPPROCESS = 0x00000002
+
+    class PROCESSENTRY32W(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", ctypes.c_long),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", wintypes.WCHAR * 260),
+        ]
+
+    kernel32 = ctypes.windll.kernel32
+    snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if snapshot in (-1, 0xFFFFFFFF):
+        return set()
+
+    pids: set[int] = set()
+    try:
+        entry = PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        if kernel32.Process32FirstW(snapshot, ctypes.byref(entry)):
+            while True:
+                if entry.szExeFile.lower() in targets:
+                    pids.add(int(entry.th32ProcessID))
+                if not kernel32.Process32NextW(snapshot, ctypes.byref(entry)):
+                    break
+    finally:
+        kernel32.CloseHandle(snapshot)
+    return pids
+
+
 def _find_windows_by_processes(image_names: tuple[str, ...]) -> list[tuple[int, str, int]]:
     import win32gui
     import win32process
 
-    targets = {name.lower() for name in image_names if name}
-    if not targets:
+    target_pids = _pids_for_process_images(image_names)
+    if not target_pids:
         return []
 
     matches: list[tuple[int, str, int]] = []
@@ -175,8 +311,7 @@ def _find_windows_by_processes(image_names: tuple[str, ...]) -> list[tuple[int, 
         if not title:
             return
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        image = _get_process_image_name(pid)
-        if image in targets:
+        if pid in target_pids:
             matches.append((hwnd, title, _window_area(hwnd)))
 
     win32gui.EnumWindows(_enum, None)
@@ -185,29 +320,45 @@ def _find_windows_by_processes(image_names: tuple[str, ...]) -> list[tuple[int, 
 
 def _launch_target(raw_name: str) -> tuple[list[str], tuple[str, ...], tuple[str, ...]]:
     """解析启动目标：内置命令 → 开始菜单快捷方式 → 已安装 exe."""
-    process_images: tuple[str, ...] = ()
     name_key = raw_name.strip().lower()
     if name_key in APP_MAP:
         exe = APP_MAP[name_key]
-        return ["cmd", "/c", "start", "", exe], _title_keywords(name_key), process_images
+        proc = _process_images_for(name_key, raw_name, exe)
+        return ["cmd", "/c", "start", "", exe], _title_keywords(name_key), proc
     if raw_name.strip() in APP_MAP:
         exe = APP_MAP[raw_name.strip()]
-        return ["cmd", "/c", "start", "", exe], _title_keywords(raw_name.strip()), process_images
+        proc = _process_images_for(name_key, raw_name, exe)
+        return ["cmd", "/c", "start", "", exe], _title_keywords(raw_name.strip()), proc
 
+    process_images: tuple[str, ...] = ()
     shortcut = _find_start_menu_shortcut(raw_name)
     if shortcut:
         keywords = (raw_name.strip(), shortcut.stem)
-        for candidate in (raw_name, shortcut.stem, *_TITLE_ALIASES.get(raw_name.strip(), ()), *_TITLE_ALIASES.get(name_key, ())):
+        alias_images: list[str] = []
+        for candidate in (
+            raw_name,
+            shortcut.stem,
+            *_TITLE_ALIASES.get(raw_name.strip(), ()),
+            *_TITLE_ALIASES.get(name_key, ()),
+        ):
+            for img in APP_PROCESS_IMAGES.get(str(candidate).strip().lower(), ()):
+                if img not in alias_images:
+                    alias_images.append(img)
             exe_path = _find_installed_exe(str(candidate))
+            if exe_path and exe_path.name not in alias_images:
+                alias_images.append(exe_path.name)
+        process_images = tuple(alias_images) if alias_images else process_images
+        if not process_images:
+            exe_path = _find_installed_exe(raw_name)
             if exe_path:
                 process_images = (exe_path.name,)
-                break
         return ["cmd", "/c", "start", "", str(shortcut)], keywords, process_images
 
     exe_path = _find_installed_exe(raw_name)
     if exe_path:
         keywords = (raw_name.strip(), exe_path.stem)
-        process_images = (exe_path.name,)
+        extra = APP_PROCESS_IMAGES.get(name_key, ())
+        process_images = (exe_path.name, *extra) if extra else (exe_path.name,)
         return ["cmd", "/c", "start", "", str(exe_path)], keywords, process_images
 
     raise ValueError(
@@ -218,6 +369,11 @@ def _launch_target(raw_name: str) -> tuple[list[str], tuple[str, ...], tuple[str
 def _is_loginish_title(title: str) -> bool:
     lowered = title.lower()
     return any(hint.lower() in lowered for hint in _LOGIN_TITLE_HINTS)
+
+
+def is_login_title(title: str) -> bool:
+    """窗口标题是否像登录/扫码界面（供 Harness 门禁）."""
+    return _is_loginish_title(title)
 
 
 def _find_matching_windows(title_keywords: tuple[str, ...]) -> list[tuple[int, str, int]]:
@@ -248,53 +404,221 @@ def _pick_best_window(matches: list[tuple[int, str, int]]) -> tuple[int, str] | 
     return hwnd, title
 
 
-def _focus_hwnd(hwnd: int) -> bool:
+def _foreground_matches_hwnd(hwnd: int) -> bool:
+    import win32gui
+    import win32process
+
+    try:
+        fg = win32gui.GetForegroundWindow()
+        if not fg:
+            return False
+        if fg == hwnd:
+            return True
+        try:
+            ga_root = 2  # GA_ROOT
+            if win32gui.GetAncestor(fg, ga_root) == hwnd:
+                return True
+            if win32gui.GetAncestor(hwnd, ga_root) == fg:
+                return True
+        except Exception:
+            pass
+        _, fg_pid = win32process.GetWindowThreadProcessId(fg)
+        _, tgt_pid = win32process.GetWindowThreadProcessId(hwnd)
+        return fg_pid == tgt_pid and tgt_pid != 0
+    except Exception:
+        return False
+
+
+def _measure_focus_for_app(
+    raw_name: str,
+    keywords: tuple[str, ...],
+    process_images: tuple[str, ...],
+) -> dict[str, Any]:
+    """综合判断目标应用是否已在前台（比单次 SetForegroundWindow 返回值更贴近肉眼所见）."""
+    import win32gui
+
+    fg = win32gui.GetForegroundWindow()
+    fg_title = win32gui.GetWindowText(fg).strip() if fg else ""
+    best = _pick_best_window(_existing_app_windows(keywords, process_images))
+    target_hwnd = best[0] if best else None
+    target_title = best[1] if best else ""
+
+    hwnd_match = bool(target_hwnd and _foreground_matches_hwnd(target_hwnd))
+    title_match = window_matches_app(fg_title, raw_name)
+    visible_ready = False
+    if target_hwnd:
+        try:
+            visible_ready = bool(
+                win32gui.IsWindowVisible(target_hwnd)
+                and not win32gui.IsIconic(target_hwnd)
+            )
+        except Exception:
+            visible_ready = False
+
+    # 窗口已可见且前台标题/进程/HWND 任一匹配 → 视为置前成功
+    focus_verified = hwnd_match or title_match
+    if not focus_verified and visible_ready and target_hwnd and fg:
+        try:
+            import win32process
+
+            _, fg_pid = win32process.GetWindowThreadProcessId(fg)
+            _, tgt_pid = win32process.GetWindowThreadProcessId(target_hwnd)
+            if fg_pid == tgt_pid and tgt_pid != 0:
+                focus_verified = True
+        except Exception:
+            pass
+
+    return {
+        "foreground_window": fg_title or "(无标题)",
+        "foreground_matches": title_match or hwnd_match,
+        "focus_verified": focus_verified,
+        "target_window": target_title,
+        "target_visible": visible_ready,
+    }
+
+
+def _finalize_open_focus(
+    raw_name: str,
+    keywords: tuple[str, ...],
+    process_images: tuple[str, ...],
+    *,
+    focus_attempted: bool,
+    focus_api_ok: bool,
+) -> dict[str, Any]:
+    measured = _measure_focus_for_app(raw_name, keywords, process_images)
+    target_title = str(measured["target_window"] or "")
+    target_matches = bool(target_title) and window_matches_app(target_title, raw_name)
+    # 小窗置前即可；Hub 浏览器抢回前台不影响（type_text 会再次聚焦后粘贴）
+    verified = (
+        focus_api_ok
+        or bool(measured["focus_verified"])
+        or (bool(measured["target_visible"]) and target_matches)
+    )
+    return {
+        "focused": verified,
+        "focus_api_ok": focus_api_ok,
+        "focus_verified": verified,
+        "foreground_window": measured["foreground_window"],
+        "foreground_matches": measured["foreground_matches"],
+        "focused_window": target_title or measured["foreground_window"],
+        "target_visible": measured["target_visible"],
+        "focus_attempted": focus_attempted,
+    }
+
+
+def _is_notepad_app(app: str) -> bool:
+    k = app.strip().lower()
+    return k in ("notepad", "记事本")
+
+
+def _is_im_app(app: str) -> bool:
+    k = app.strip().lower()
+    return k in ("wechat", "微信", "qq", "钉钉", "dingtalk", "飞书", "feishu")
+
+
+def _focus_hwnd(
+    hwnd: int,
+    *,
+    click_center: bool = False,
+    app_for_click: str | None = None,
+    post_focus_wait: float = 0.35,
+    aggressive: bool = True,
+) -> bool:
     import win32con
     import win32gui
     import win32process
 
     try:
-        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        fg = win32gui.GetForegroundWindow()
-        fg_tid = win32process.GetWindowThreadProcessId(fg)[0]
-        tgt_tid = win32process.GetWindowThreadProcessId(hwnd)[0]
-        if fg_tid != tgt_tid:
-            win32process.AttachThreadInput(fg_tid, tgt_tid, True)
-        win32gui.SetForegroundWindow(hwnd)
-        if fg_tid != tgt_tid:
-            win32process.AttachThreadInput(fg_tid, tgt_tid, False)
-        time.sleep(0.4)
+        attempts = 3 if aggressive else 1
+        for _ in range(attempts):
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            if aggressive:
+                win32gui.BringWindowToTop(hwnd)
+                try:
+                    # TOPMOST/NOTOPMOST 能显著提高部分应用被置前成功率（仅首次打开时用）
+                    win32gui.SetWindowPos(
+                        hwnd,
+                        win32con.HWND_TOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        win32con.SWP_NOMOVE | win32con.SWP_NOSIZE,
+                    )
+                    win32gui.SetWindowPos(
+                        hwnd,
+                        win32con.HWND_NOTOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        win32con.SWP_NOMOVE | win32con.SWP_NOSIZE,
+                    )
+                except Exception:
+                    pass
+
+            fg = win32gui.GetForegroundWindow()
+            fg_tid = win32process.GetWindowThreadProcessId(fg)[0]
+            tgt_tid = win32process.GetWindowThreadProcessId(hwnd)[0]
+            attached = False
+            if fg_tid != tgt_tid:
+                win32process.AttachThreadInput(fg_tid, tgt_tid, True)
+                attached = True
+            win32gui.SetForegroundWindow(hwnd)
+            if attached:
+                win32process.AttachThreadInput(fg_tid, tgt_tid, False)
+
+            time.sleep(post_focus_wait)
+            if _foreground_matches_hwnd(hwnd):
+                break
+
+        if not _foreground_matches_hwnd(hwnd):
+            return False
+        if click_center:
+            _click_edit_area(hwnd, app_for_click)
         return True
     except Exception:
         return False
 
 
-def _focus_window(title_keywords: tuple[str, ...], timeout: float = 6.0) -> bool:
+def _focus_window(
+    title_keywords: tuple[str, ...],
+    process_images: tuple[str, ...] = (),
+    *,
+    timeout: float = 6.0,
+    click_center: bool = False,
+    app_for_click: str | None = None,
+    post_focus_wait: float = 0.35,
+    aggressive: bool = True,
+) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        matches = _find_matching_windows(title_keywords)
+        matches = _existing_app_windows(title_keywords, process_images)
         best = _pick_best_window(matches)
-        if best and _focus_hwnd(best[0]):
+        if best and _focus_hwnd(
+            best[0],
+            click_center=click_center,
+            app_for_click=app_for_click,
+            post_focus_wait=post_focus_wait,
+            aggressive=aggressive,
+        ):
             return True
         time.sleep(0.25)
     return False
 
 
-def _find_window_hwnd(title_keywords: tuple[str, ...], timeout: float = 5.0) -> int | None:
+def _find_window_hwnd(
+    title_keywords: tuple[str, ...],
+    process_images: tuple[str, ...] = (),
+    timeout: float = 5.0,
+) -> int | None:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        best = _pick_best_window(_find_matching_windows(title_keywords))
+        best = _pick_best_window(_existing_app_windows(title_keywords, process_images))
         if best:
             return best[0]
         time.sleep(0.25)
     return None
-
-
-def _paste_text(text: str) -> None:
-    pyperclip.copy(text)
-    time.sleep(0.05)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.15)
 
 
 def window_matches_app(foreground_title: str, app_name: str) -> bool:
@@ -309,10 +633,60 @@ def window_matches_app(foreground_title: str, app_name: str) -> bool:
         return False
     if not process_images:
         return False
+    fg = foreground_title.strip()
     for _, title, _ in _find_windows_by_processes(process_images):
-        if title == foreground_title:
+        if title == fg:
             return True
-    return False
+    # 前台标题可能是联系人名，只要同进程有可见主窗且已聚焦到该进程即可
+    import win32gui
+    import win32process
+
+    hwnd = win32gui.GetForegroundWindow()
+    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+    image = _get_process_image_name(pid)
+    return image in {n.lower() for n in process_images}
+
+
+def _nudge_app_focus(app: str) -> None:
+    """置前目标应用一次，便于紧接着发 Ctrl+V / Ctrl+S；不校验、不点编辑区."""
+    if not app.strip():
+        return
+    keywords, process_images = _resolve_app_target(app)
+    _focus_window(
+        keywords,
+        process_images,
+        timeout=3.0,
+        click_center=False,
+        app_for_click=app,
+        post_focus_wait=0.12,
+        aggressive=True,
+    )
+
+
+def _paste_text(text: str) -> None:
+    """剪贴板 + Ctrl+V 粘贴到当前前台窗口."""
+    pyperclip.copy(text)
+    time.sleep(0.08)
+    _hotkey_names("ctrl", "v")
+    time.sleep(0.12)
+
+
+def _process_images_for(name_key: str, raw_name: str, exe: str) -> tuple[str, ...]:
+    if name_key in APP_PROCESS_IMAGES:
+        return APP_PROCESS_IMAGES[name_key]
+    if raw_name.strip() in APP_PROCESS_IMAGES:
+        return APP_PROCESS_IMAGES[raw_name.strip()]
+    if exe and not exe.endswith(".exe"):
+        return (f"{exe}.exe",)
+    return (exe,) if exe else ()
+
+
+def _merge_window_matches(*groups: list[tuple[int, str, int]]) -> list[tuple[int, str, int]]:
+    merged: dict[int, tuple[int, str, int]] = {}
+    for group in groups:
+        for item in group:
+            merged[item[0]] = item
+    return list(merged.values())
 
 
 def _existing_app_windows(
@@ -322,7 +696,141 @@ def _existing_app_windows(
     by_title = _find_matching_windows(keywords)
     if by_title:
         return by_title
-    return _find_windows_by_processes(process_images)
+    if process_images:
+        return _find_windows_by_processes(process_images)
+    return []
+
+
+def _login_screen_detected(
+    titles: list[str],
+    keywords: tuple[str, ...],
+    process_images: tuple[str, ...],
+    focused_window: str,
+) -> bool:
+    """仅当确认只有登录/扫码窗、且不存在已登录主窗口时为真."""
+    all_windows = _existing_app_windows(keywords, process_images)
+    if not all_windows:
+        return bool(focused_window and _is_loginish_title(focused_window))
+    non_login = [t for _, t, _ in all_windows if not _is_loginish_title(t)]
+    if non_login:
+        return False
+    return any(_is_loginish_title(t) for t in titles) or (
+        bool(focused_window) and _is_loginish_title(focused_window)
+    )
+
+
+def _click_client_point(hwnd: int, rel_x: float, rel_y: float) -> None:
+    """在客户区相对坐标点击（0–1），用于把键盘焦点落到编辑区."""
+    import win32gui
+
+    try:
+        left, top, right, bottom = win32gui.GetClientRect(hwnd)
+        width = max(0, right - left)
+        height = max(0, bottom - top)
+        if width < 4 or height < 4:
+            return
+        cx = max(8, int(width * max(0.08, min(0.92, rel_x))))
+        cy = max(8, int(height * max(0.08, min(0.92, rel_y))))
+        sx, sy = win32gui.ClientToScreen(hwnd, (cx, cy))
+        pyautogui.click(sx, sy)
+        time.sleep(0.15)
+    except Exception:
+        pass
+
+
+def _edit_area_position(app: str | None) -> tuple[float, float]:
+    if app and _is_notepad_app(app):
+        return 0.5, 0.72
+    if app and _is_im_app(app):
+        return 0.5, 0.88
+    return 0.5, 0.5
+
+
+def _click_edit_area(hwnd: int, app: str | None = None) -> None:
+    rx, ry = _edit_area_position(app)
+    _click_client_point(hwnd, rx, ry)
+
+
+def _click_client_center(hwnd: int) -> None:
+    _click_edit_area(hwnd, None)
+
+
+def _resolve_app_target(app: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    if _is_notepad_app(app):
+        return _NOTEPAD_TITLES, ("notepad.exe",)
+    keywords = _title_keywords(app)
+    try:
+        _, _, process_images = _launch_target(app)
+    except ValueError:
+        process_images = ()
+    return keywords, process_images
+
+
+def foreground_is_app(app: str) -> bool:
+    """前台是否已是目标应用（标题或进程/HWND）."""
+    import win32gui
+
+    if not app.strip():
+        return False
+    fg_title = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
+    if window_matches_app(fg_title, app):
+        return True
+    keywords, process_images = _resolve_app_target(app)
+    best = _pick_best_window(_existing_app_windows(keywords, process_images))
+    return bool(best and _foreground_matches_hwnd(best[0]))
+
+
+def ensure_app_focus_for_input(
+    app: str,
+    *,
+    click_edit: bool | None = None,
+    aggressive: bool = False,
+    timeout: float = 5.0,
+    post_wait: float = 0.2,
+) -> tuple[bool, str, int | None]:
+    """确保目标应用在前台且编辑区可输入；已聚焦时避免 TOPMOST 抢焦点."""
+    import win32gui
+
+    if not app.strip():
+        return False, "", None
+    if click_edit is None:
+        click_edit = _is_notepad_app(app) or _is_im_app(app)
+
+    keywords, process_images = _resolve_app_target(app)
+    best = _pick_best_window(_existing_app_windows(keywords, process_images))
+    if not best:
+        return False, "", None
+    hwnd, title = best
+
+    fg_title = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
+    already_focused = foreground_is_app(app)
+
+    if already_focused and not aggressive:
+        return True, fg_title or title, hwnd
+
+    focused = _focus_window(
+        keywords,
+        process_images,
+        timeout=timeout,
+        click_center=click_edit,
+        app_for_click=app,
+        post_focus_wait=post_wait,
+        aggressive=aggressive or not already_focused,
+    )
+    if not focused and not aggressive:
+        focused = _focus_window(
+            keywords,
+            process_images,
+            timeout=max(2.0, timeout * 0.6),
+            click_center=click_edit,
+            app_for_click=app,
+            post_focus_wait=post_wait,
+            aggressive=True,
+        )
+    if not focused:
+        return False, title, hwnd
+    fg_after = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
+    return True, fg_after or title, hwnd
 
 
 def open_app(params: dict[str, Any]) -> dict[str, Any]:
@@ -331,45 +839,84 @@ def open_app(params: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("未指定应用名称")
 
     argv, keywords, process_images = _launch_target(raw_name)
-    reuse_if_open = params.get("reuse_if_open", True)
+    reuse_if_open = bool(params.get("reuse_if_open", True))
+    want_focus = bool(params.get("focus", True))
+    startup_wait = _clamp_wait(params.get("startup_wait"), default=1.1, min_v=0.0, max_v=12.0)
+    focus_timeout = _clamp_wait(params.get("focus_timeout"), default=10.0, min_v=1.0, max_v=20.0)
+    settle_wait = _clamp_wait(params.get("settle_wait"), default=0.45, min_v=0.05, max_v=3.0)
     existing = _existing_app_windows(keywords, process_images)
 
     if existing and reuse_if_open:
-        best = _pick_best_window(existing)
-        focused_window = best[1] if best else existing[0][1]
-        focused = bool(best and _focus_hwnd(best[0]))
+        focus_api_ok = False
+        if want_focus:
+            focus_api_ok = _focus_window(
+                keywords,
+                process_images,
+                timeout=focus_timeout,
+                click_center=False,
+                app_for_click=raw_name,
+                post_focus_wait=settle_wait,
+                aggressive=True,
+            )
         titles = [title for _, title, _ in existing]
+        focus_info = _finalize_open_focus(
+            raw_name,
+            keywords,
+            process_images,
+            focus_attempted=want_focus,
+            focus_api_ok=focus_api_ok,
+        )
         return {
             "opened": raw_name,
             "launched": False,
             "already_running": True,
             "matching_windows": titles,
             "window_count": len(existing),
-            "focused_window": focused_window,
-            "focused": focused,
+            **focus_info,
+            "focus_requested": want_focus,
+            "startup_wait": startup_wait,
+            "focus_timeout": focus_timeout,
+            "login_screen_detected": _login_screen_detected(
+                titles, keywords, process_images, focus_info["focused_window"]
+            ),
         }
 
     subprocess.Popen(argv, shell=False)
 
-    focused = False
-    focused_window = ""
-    if params.get("focus", True):
-        time.sleep(0.8)
-        focused = _focus_window(keywords)
-        if not focused and process_images:
-            proc_matches = _find_windows_by_processes(process_images)
-            best = _pick_best_window(proc_matches)
-            if best:
-                focused = _focus_hwnd(best[0])
-                if focused:
-                    focused_window = best[1]
-        elif focused:
-            best = _pick_best_window(_existing_app_windows(keywords, process_images))
-            if best:
-                focused_window = best[1]
+    focus_api_ok = False
+    if want_focus:
+        time.sleep(startup_wait)
+        focus_api_ok = _focus_window(
+            keywords,
+            process_images,
+            timeout=focus_timeout,
+            click_center=False,
+            app_for_click=raw_name,
+            post_focus_wait=settle_wait,
+            aggressive=True,
+        )
+        if not focus_api_ok:
+            # 某些应用窗口晚于进程可见，二次补偿
+            time.sleep(0.5)
+            focus_api_ok = _focus_window(
+                keywords,
+                process_images,
+                timeout=max(2.0, focus_timeout * 0.6),
+                click_center=False,
+                app_for_click=raw_name,
+                post_focus_wait=settle_wait,
+                aggressive=True,
+            ) or focus_api_ok
 
     after = _existing_app_windows(keywords, process_images)
     titles = [title for _, title, _ in after]
+    focus_info = _finalize_open_focus(
+        raw_name,
+        keywords,
+        process_images,
+        focus_attempted=want_focus,
+        focus_api_ok=focus_api_ok,
+    )
     return {
         "opened": raw_name,
         "launch": argv[-1],
@@ -377,8 +924,13 @@ def open_app(params: dict[str, Any]) -> dict[str, Any]:
         "already_running": False,
         "matching_windows": titles,
         "window_count": len(after),
-        "focused_window": focused_window,
-        "focused": focused,
+        **focus_info,
+        "focus_requested": want_focus,
+        "startup_wait": startup_wait,
+        "focus_timeout": focus_timeout,
+        "login_screen_detected": _login_screen_detected(
+            titles, keywords, process_images, focus_info["focused_window"]
+        ),
     }
 
 
@@ -387,28 +939,104 @@ def focus_window(params: dict[str, Any]) -> dict[str, Any]:
     if not title:
         raise ValueError("未指定窗口 title/name")
     keywords = _title_keywords(title)
-    if not _focus_window(keywords, timeout=float(params.get("timeout", 6))):
+    try:
+        _, _, process_images = _launch_target(title)
+    except ValueError:
+        process_images = ()
+    timeout = _clamp_wait(params.get("timeout"), default=6.0, min_v=1.0, max_v=20.0)
+    settle_wait = _clamp_wait(params.get("settle_wait"), default=0.35, min_v=0.05, max_v=3.0)
+    click_center = bool(params.get("click_center", False))
+    if not _focus_window(
+        keywords,
+        process_images,
+        timeout=timeout,
+        click_center=click_center,
+        post_focus_wait=settle_wait,
+    ):
         raise RuntimeError(f"未找到窗口: {title}")
-    return {"focused": title, "keywords": list(keywords)}
+    return {
+        "focused": title,
+        "keywords": list(keywords),
+        "timeout": timeout,
+        "settle_wait": settle_wait,
+    }
+
+
+def _focus_via_alt_tab(target_hwnd: int, *, max_switches: int = 20) -> bool:
+    """Alt+Tab 切换到目标 HWND（Win32 置前失败时的兜底）."""
+    import win32api
+    import win32con
+    import win32gui
+
+    if not win32gui.IsWindow(target_hwnd):
+        return False
+    if _foreground_matches_hwnd(target_hwnd):
+        return True
+    win32api.keybd_event(_VK["alt"], 0, 0, 0)
+    try:
+        for _ in range(max(1, max_switches)):
+            _press_vk(_VK["tab"])
+            time.sleep(0.14)
+            if _foreground_matches_hwnd(target_hwnd):
+                return True
+        return _foreground_matches_hwnd(target_hwnd)
+    finally:
+        win32api.keybd_event(_VK["alt"], 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.06)
+
+
+def _resolve_close_target(params: dict[str, Any]) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    raw = str(params.get("name") or params.get("title") or "").strip()
+    if not raw:
+        raise ValueError("未指定要关闭的应用 name/title")
+    try:
+        _, keywords, process_images = _launch_target(raw)
+        return raw, keywords, process_images
+    except ValueError:
+        return raw, _title_keywords(raw), ()
 
 
 def close_app(params: dict[str, Any]) -> dict[str, Any]:
-    title = str(params.get("title") or params.get("name") or "").strip()
-    if not title:
-        raise ValueError("未指定要关闭的应用 title/name")
-    keywords = _title_keywords(title)
-    if not _focus_window(keywords, timeout=float(params.get("timeout", 5))):
-        raise RuntimeError(f"未找到窗口: {title}")
-    method = str(params.get("method", "alt_f4")).lower()
-    if method == "hotkey" and params.get("keys"):
-        keys = params["keys"]
-        if isinstance(keys, str):
-            keys = [k.strip() for k in keys.replace("+", " ").split() if k.strip()]
-        pyautogui.hotkey(*keys)
-    else:
-        pyautogui.hotkey("alt", "f4")
-    time.sleep(0.35)
-    return {"closed": title, "method": method}
+    """置前目标窗口（失败则 Alt+Tab 切换）后 WM_CLOSE / Alt+F4 关闭."""
+    import win32con
+    import win32gui
+
+    raw, keywords, process_images = _resolve_close_target(params)
+    timeout = float(params.get("timeout", 6.0))
+    hwnd = _find_window_hwnd(keywords, process_images, timeout=timeout)
+    if not hwnd:
+        raise RuntimeError(f"未找到要关闭的窗口: {raw}")
+
+    window_title = win32gui.GetWindowText(hwnd).strip()
+    focus_method = "hwnd"
+    if not _focus_hwnd(hwnd, aggressive=True, post_focus_wait=0.2):
+        focus_method = "alt_tab"
+        if not _focus_via_alt_tab(hwnd):
+            raise RuntimeError(f"无法切换到目标窗口: {raw}")
+
+    time.sleep(0.12)
+    closed = False
+    close_method = f"{focus_method}_wm_close"
+    try:
+        win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+        time.sleep(0.35)
+        closed = not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd)
+    except Exception:
+        closed = False
+    if not closed and win32gui.IsWindow(hwnd):
+        close_method = f"{focus_method}_alt_f4"
+        _hotkey_names("alt", "f4")
+        time.sleep(0.45)
+        closed = not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd)
+
+    still_open = win32gui.IsWindow(hwnd) and win32gui.IsWindowVisible(hwnd)
+    return {
+        "closed": raw,
+        "window_title": window_title,
+        "method": close_method,
+        "still_visible": still_open,
+        "success": not still_open,
+    }
 
 
 def list_windows(params: dict[str, Any]) -> dict[str, Any]:
@@ -443,7 +1071,12 @@ def minimize_window(params: dict[str, Any]) -> dict[str, Any]:
     import win32gui
 
     title = str(params.get("title") or params.get("name") or "").strip()
-    hwnd = _find_window_hwnd(_title_keywords(title))
+    keywords = _title_keywords(title)
+    try:
+        _, _, process_images = _launch_target(title)
+    except ValueError:
+        process_images = ()
+    hwnd = _find_window_hwnd(keywords, process_images)
     if not hwnd:
         raise RuntimeError(f"未找到窗口: {title}")
     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
@@ -455,7 +1088,12 @@ def maximize_window(params: dict[str, Any]) -> dict[str, Any]:
     import win32gui
 
     title = str(params.get("title") or params.get("name") or "").strip()
-    hwnd = _find_window_hwnd(_title_keywords(title))
+    keywords = _title_keywords(title)
+    try:
+        _, _, process_images = _launch_target(title)
+    except ValueError:
+        process_images = ()
+    hwnd = _find_window_hwnd(keywords, process_images)
     if not hwnd:
         raise RuntimeError(f"未找到窗口: {title}")
     win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
@@ -481,42 +1119,233 @@ def press_key(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def type_text(params: dict[str, Any]) -> dict[str, Any]:
+    """向前台窗口输入；默认假定 open_app 已置前，发剪贴板+Ctrl+V 或 write."""
     text = params.get("text", "")
     if not text:
         raise ValueError("text 不能为空")
 
     import win32gui
 
+    pre_wait = _clamp_wait(params.get("pre_wait"), default=0.12, min_v=0.0, max_v=5.0)
+    post_wait = _clamp_wait(params.get("post_wait"), default=0.15, min_v=0.0, max_v=5.0)
+    app = str(params.get("app") or "").strip()
+
+    if app:
+        _nudge_app_focus(app)
+
     foreground = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
+    time.sleep(pre_wait)
 
-    app = params.get("app", "").strip().lower()
-    if app in ("notepad", "记事本"):
-        if not _focus_window(_NOTEPAD_TITLES, timeout=4.0):
-            raise RuntimeError("未找到记事本窗口，请先打开记事本")
-    elif app:
-        keywords = _title_keywords(app)
-        if not _focus_window(keywords, timeout=4.0):
-            _, _, process_images = _launch_target(app)
-            proc_matches = _find_windows_by_processes(process_images)
-            best = _pick_best_window(proc_matches)
-            if not best or not _focus_hwnd(best[0]):
-                raise RuntimeError(f"未找到窗口: {app}")
-
-    time.sleep(0.2)
-    foreground_after = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
-
-    # pyautogui.write 仅支持 ASCII；中文等用剪贴板粘贴
     if any(ord(ch) > 127 for ch in text):
         _paste_text(text)
         method = "paste"
     else:
         pyautogui.write(text, interval=0.02)
         method = "write"
+    time.sleep(post_wait)
 
+    foreground_final = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
     return {
         "typed_length": len(text),
         "method": method,
         "text": text,
-        "foreground_window": foreground_after or foreground,
+        "foreground_window": foreground_final or foreground,
         "app_requested": app or None,
+        "pre_wait": pre_wait,
+        "post_wait": post_wait,
     }
+
+
+def _commit_save_dialog(target: Path) -> bool:
+    """另存为：全选 → 粘贴完整路径 → 回车."""
+    pyperclip.copy(str(target))
+    time.sleep(0.12)
+    _hotkey_names("ctrl", "a")
+    time.sleep(0.06)
+    _hotkey_names("ctrl", "v")
+    time.sleep(0.12)
+    _hotkey_names("enter")
+    time.sleep(1.2)
+    if target.is_file():
+        return True
+    _hotkey_names("enter")
+    time.sleep(0.8)
+    return target.is_file()
+
+
+def save_notepad(params: dict[str, Any]) -> dict[str, Any]:
+    """记事本 Ctrl+S → 填路径 → 回车（发快捷键前可 nudge 置前）."""
+    from sensehub.security.sandbox import default_save_dir
+
+    raw_name = str(params.get("filename") or params.get("path") or "note.txt").strip()
+    if not raw_name:
+        raw_name = "note.txt"
+    target = Path(raw_name)
+    if not target.is_absolute():
+        target = (default_save_dir() / target.name).resolve()
+    else:
+        target = target.expanduser().resolve()
+    if target.suffix.lower() != ".txt":
+        target = target.with_suffix(".txt")
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    app = str(params.get("app") or "notepad").strip()
+    if app:
+        _nudge_app_focus(app)
+        time.sleep(0.15)
+
+    _hotkey_names("ctrl", "s")
+    time.sleep(1.6)
+    saved = _commit_save_dialog(target)
+    return {
+        "saved_path": str(target),
+        "filename": target.name,
+        "file_exists": saved,
+        "method": "ctrl_s_paste_path",
+    }
+
+
+def notepad_type_save(params: dict[str, Any]) -> dict[str, Any]:
+    """记事本一条龙：打开置前 → Ctrl+V 粘贴 → Ctrl+S 保存（同一线程连续发快捷键）."""
+    text = str(params.get("text", "")).strip()
+    if not text:
+        raise ValueError("text 不能为空")
+    raw_name = str(params.get("filename") or params.get("path") or "note.txt").strip() or "note.txt"
+    do_open = bool(params.get("open", True))
+
+    open_out: dict[str, Any] | None = None
+    if do_open:
+        open_out = open_app({"name": "notepad", "focus": True, "reuse_if_open": True})
+    else:
+        _nudge_app_focus("notepad")
+    time.sleep(0.3)
+
+    _nudge_app_focus("notepad")
+    type_out = type_text({"text": text})
+    time.sleep(0.2)
+    _nudge_app_focus("notepad")
+    save_out = save_notepad({"filename": raw_name, "app": "notepad"})
+    return {
+        "text": text,
+        "opened": do_open,
+        "open": open_out,
+        "typed_length": type_out.get("typed_length"),
+        "method": type_out.get("method"),
+        **save_out,
+    }
+
+
+def wechat_send_message(params: dict[str, Any]) -> dict[str, Any]:
+    """微信：首步置前一次 → Ctrl+F 搜联系人 → Enter 进会话 → 粘贴 → Enter 发送。
+
+    置前、Ctrl+F、进会话之后均默认焦点仍在微信，不再重复找窗/点编辑区/校验前台。
+    """
+    contact = str(params.get("contact") or params.get("name") or "").strip()
+    message = str(params.get("message") or params.get("text") or "").strip()
+    if not contact:
+        raise ValueError("contact 不能为空")
+    if not message:
+        raise ValueError("message 不能为空")
+
+    app = "微信"
+    do_send = bool(params.get("send", True))
+    do_open = bool(params.get("open", False))
+    search_wait = _clamp_wait(params.get("search_wait"), default=0.9, min_v=0.35, max_v=3.0)
+    chat_wait = _clamp_wait(params.get("chat_wait"), default=0.55, min_v=0.2, max_v=3.0)
+
+    keywords, process_images = _resolve_app_target(app)
+    existing = _existing_app_windows(keywords, process_images)
+    if not existing:
+        raise RuntimeError("未检测到微信在运行，请先启动微信")
+
+    focused_title = ""
+    open_out: dict[str, Any] | None = None
+    if do_open:
+        open_out = open_app({"name": app, "focus": True, "reuse_if_open": True})
+        focused_title = str((open_out or {}).get("focused_window") or (open_out or {}).get("foreground_window") or "")
+        time.sleep(0.12)
+    else:
+        best = _pick_best_window(existing)
+        if best:
+            hwnd, focused_title = best
+            _focus_hwnd(
+                hwnd,
+                click_center=False,
+                app_for_click=app,
+                post_focus_wait=0.12,
+                aggressive=True,
+            )
+        time.sleep(0.1)
+
+    _hotkey_names("ctrl", "f")
+    time.sleep(0.28)
+    _hotkey_names("ctrl", "a")
+    time.sleep(0.05)
+    _paste_text(contact)
+    time.sleep(search_wait)
+    _press_vk(_VK["enter"])
+    time.sleep(chat_wait)
+    _paste_text(message)
+    time.sleep(0.08)
+
+    sent = False
+    if do_send:
+        _press_vk(_VK["enter"])
+        sent = True
+        time.sleep(0.08)
+
+    if not focused_title:
+        import win32gui
+
+        focused_title = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
+
+    return {
+        "app": app,
+        "contact": contact,
+        "message": message,
+        "sent": sent,
+        "method": "ctrl_f_search_paste_send",
+        "foreground_window": focused_title,
+        "open": open_out,
+    }
+
+
+def _primary_app_from_steps(steps: list[Any]) -> str | None:
+    for step in reversed(steps):
+        tool = getattr(step, "tool", None) or (step.get("tool") if isinstance(step, dict) else None)
+        params = getattr(step, "params", None) or (step.get("params") if isinstance(step, dict) else {}) or {}
+        if tool == "open_app":
+            name = str(params.get("name", "")).strip()
+            if name:
+                return name
+        if tool == "notepad_type_save":
+            return "notepad"
+        if tool == "wechat_send_message":
+            return "微信"
+        if tool == "type_text":
+            app = str(params.get("app", "")).strip()
+            if app:
+                return app
+    return None
+
+
+def schedule_refocus_from_steps(steps: list[Any], *, delay: float = 0.45) -> None:
+    """Hub 网页在请求返回后常会抢回焦点；延迟再次把目标应用置前."""
+    name = _primary_app_from_steps(steps)
+    if not name:
+        return
+
+    def _run() -> None:
+        time.sleep(delay)
+        try:
+            ensure_app_focus_for_input(
+                name,
+                click_edit=False,
+                aggressive=True,
+                timeout=5.0,
+                post_wait=0.2,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()

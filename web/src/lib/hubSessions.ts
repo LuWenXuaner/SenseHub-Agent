@@ -21,8 +21,39 @@ export type HubSession = {
   logs: HubLogItem[];
 };
 
-const STORAGE_KEY = "sensehub_hub_sessions";
+const STORAGE_PREFIX = "sensehub_hub_sessions";
+const DELETED_PREFIX = "sensehub_hub_deleted_sessions";
 const MAX_SESSIONS = 40;
+const MAX_DELETED_TOMBSTONES = 200;
+
+function deletedStorageKey(scope: string): string {
+  return `${DELETED_PREFIX}::${scope}`;
+}
+
+export function loadDeletedSessionIds(scope = "guest"): Set<string> {
+  try {
+    const raw = localStorage.getItem(deletedStorageKey(scope));
+    if (!raw) return new Set();
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return new Set();
+    return new Set(data.filter((id) => typeof id === "string" && id.trim()));
+  } catch {
+    return new Set();
+  }
+}
+
+export function markSessionDeleted(sessionId: string, scope = "guest"): void {
+  const id = sessionId.trim();
+  if (!id) return;
+  const set = loadDeletedSessionIds(scope);
+  set.add(id);
+  const arr = [...set].slice(-MAX_DELETED_TOMBSTONES);
+  localStorage.setItem(deletedStorageKey(scope), JSON.stringify(arr));
+}
+
+function storageKey(scope: string): string {
+  return `${STORAGE_PREFIX}::${scope}`;
+}
 
 export function sessionTitleFromLogs(logs: HubLogItem[]): string {
   const first = logs.find((l) => l.role === "user" && l.text.trim())?.text.trim();
@@ -30,9 +61,9 @@ export function sessionTitleFromLogs(logs: HubLogItem[]): string {
   return first.length > 28 ? `${first.slice(0, 28)}…` : first;
 }
 
-export function loadHubSessions(): HubSession[] {
+export function loadHubSessions(scope = "guest"): HubSession[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(scope));
     if (!raw) return [];
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return [];
@@ -51,16 +82,24 @@ export function loadHubSessions(): HubSession[] {
   }
 }
 
-export function saveHubSessions(sessions: HubSession[]): void {
+export function saveHubSessions(sessions: HubSession[], scope = "guest"): void {
   const trimmed = sessions
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_SESSIONS);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  localStorage.setItem(storageKey(scope), JSON.stringify(trimmed));
 }
 
 export function upsertHubSession(sessions: HubSession[], session: HubSession): HubSession[] {
   const rest = sessions.filter((s) => s.id !== session.id);
   return [session, ...rest].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_SESSIONS);
+}
+
+/** 后端分配了正式 session_id 时，把本地临时 UUID 换成服务端 ID。 */
+export function replaceSessionId(sessions: HubSession[], oldId: string, newId: string): HubSession[] {
+  const from = oldId.trim();
+  const to = newId.trim();
+  if (!from || !to || from === to) return sessions;
+  return sessions.map((s) => (s.id === from ? { ...s, id: to } : s));
 }
 
 export function createHubSession(id?: string): HubSession {

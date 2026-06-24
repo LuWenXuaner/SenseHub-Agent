@@ -22,6 +22,7 @@ export type MessageTree = {
   claw: Record<string, string>;
   console: Record<string, string>;
   points: Record<string, string>;
+  gamification: Record<string, string>;
   pointsHistory: Record<string, string>;
   invite: Record<string, string>;
   inviteProgress: Record<string, string>;
@@ -39,6 +40,7 @@ export type MessageTree = {
   redeemDialog: Record<string, string>;
   docsPage: Record<string, string>;
   apiKeys: Record<string, string>;
+  brainRouting: Record<string, string>;
   securityPage: Record<string, string>;
   pluginsPage: Record<string, string>;
   billsPage: Record<string, string>;

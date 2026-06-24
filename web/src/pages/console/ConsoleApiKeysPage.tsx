@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import { ConsoleBrainRouting } from "@/components/console/ConsoleBrainRouting";
 import { ConsolePageFrame } from "@/components/mimo/ConsolePageFrame";
 import { useLocale } from "@/context/LocaleContext";
 import { API_INTEGRATIONS } from "@/lib/integrationCatalog";
@@ -16,40 +17,24 @@ type ProviderRow = {
   default_base_url: string;
 };
 
-type RoleRow = { role: string; provider: string; provider_label: string; model: string };
-
-function rolesFromConfig(models: unknown): RoleRow[] {
-  const roles = (models as { roles?: Record<string, { provider?: string; model?: string }> }).roles;
-  if (!roles || typeof roles !== "object") return [];
-  return Object.entries(roles).map(([role, row]) => ({
-    role,
-    provider: String(row?.provider ?? ""),
-    provider_label: String(row?.provider ?? ""),
-    model: String(row?.model ?? ""),
-  }));
-}
-
 export function ConsoleApiKeysPage() {
   const { t, locale } = useLocale();
   const k = t.apiKeys;
   const [providers, setProviders] = useState<ProviderRow[]>([]);
-  const [roles, setRoles] = useState<RoleRow[]>([]);
   const [draft, setDraft] = useState<Record<string, { base_url: string; api_key: string }>>({});
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
   const load = () =>
-    Promise.all([api.getApiConfig(), api.modelsConfig()])
-      .then(([c, models]) => {
-        const list = (c as { providers?: ProviderRow[] }).providers || [];
-        setProviders(list);
-        setRoles(rolesFromConfig(models));
-        const init: Record<string, { base_url: string; api_key: string }> = {};
-        for (const p of list) {
-          init[p.id] = { base_url: p.base_url || p.default_base_url || "", api_key: "" };
-        }
-        setDraft(init);
-      });
+    api.getApiConfig().then((c) => {
+      const list = (c as { providers?: ProviderRow[] }).providers || [];
+      setProviders(list);
+      const init: Record<string, { base_url: string; api_key: string }> = {};
+      for (const p of list) {
+        init[p.id] = { base_url: p.base_url || p.default_base_url || "", api_key: "" };
+      }
+      setDraft(init);
+    });
 
   useEffect(() => {
     load().catch(() => {});
@@ -116,33 +101,6 @@ export function ConsoleApiKeysPage() {
         </table>
       </div>
 
-      {roles.length > 0 && (
-        <>
-          <h3 className="mt-10 text-lg font-semibold">{k.roleRouting}</h3>
-          <p className="mt-1 text-sm text-mimo-muted">{k.roleRoutingDesc}</p>
-          <div className="mimo-console-panel mt-4 overflow-x-auto p-0">
-            <table className="mimo-console-table w-full text-sm">
-              <thead>
-                <tr>
-                  <th>Role</th>
-                  <th>Provider</th>
-                  <th>Model</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roles.map((r) => (
-                  <tr key={r.role}>
-                    <td className="font-mono text-xs">{r.role}</td>
-                    <td>{r.provider_label || r.provider}</td>
-                    <td className="max-w-xs truncate font-mono text-xs text-mimo-muted">{r.model}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
       <h3 className="mt-10 text-lg font-semibold">{k.configuredProviders}</h3>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {providers.map((p) => (
@@ -192,6 +150,10 @@ export function ConsoleApiKeysPage() {
         <Link to="/product/api" className="mimo-console-outline-btn">
           {t.nav.docs}
         </Link>
+      </div>
+
+      <div className="mt-10">
+        <ConsoleBrainRouting variant="full" />
       </div>
     </ConsolePageFrame>
   );

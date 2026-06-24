@@ -79,6 +79,13 @@ async def wallet_bills(username: str = Depends(get_current_user)):
     }
 
 
+@router.get("/wallet/token-usage")
+async def wallet_token_usage(days: int = 30, username: str = Depends(get_current_user)):
+    from sensehub.db import token_usage as token_usage_store
+
+    return token_usage_store.token_usage_summary(username, days=days)
+
+
 @router.get("/invites")
 async def invites_overview(username: str = Depends(get_current_user)):
     return {

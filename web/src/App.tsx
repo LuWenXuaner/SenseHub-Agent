@@ -28,6 +28,7 @@ import { VoicePage } from "@/pages/perception/VoicePage";
 import { VirtualScreenPage } from "@/pages/perception/VirtualScreenPage";
 import { ConsoleAccountPage } from "@/pages/console/ConsoleAccountPage";
 import { ConsoleApiKeysPage } from "@/pages/console/ConsoleApiKeysPage";
+import { ConsoleEngagementPage } from "@/pages/console/ConsoleEngagementPage";
 import { ConsolePointsPage } from "@/pages/console/ConsolePointsPage";
 import { ConsoleTokenPlanPage } from "@/pages/console/ConsoleTokenPlanPage";
 import { ConsoleBillsPage } from "@/pages/console/ConsoleBillsPage";
@@ -83,6 +84,7 @@ function AppRoutes() {
           <Route path="account" element={<ConsoleAccountPage />} />
           <Route path="api-keys" element={<ConsoleApiKeysPage />} />
           <Route path="points" element={<ConsolePointsPage />} />
+          <Route path="engagement" element={<ConsoleEngagementPage />} />
           <Route path="balance" element={<Navigate to="/console/points" replace />} />
           <Route path="token-plan" element={<ConsoleTokenPlanPage />} />
           <Route path="bills" element={<ConsoleBillsPage />} />

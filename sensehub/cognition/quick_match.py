@@ -1,4 +1,4 @@
-"""文本规范化（供规划脑使用）。match_quick_plan 已废弃，主路径一律走 orchestrate_brains."""
+"""文本规范化与高置信度桌面捷径（match_quick_plan）."""
 
 from __future__ import annotations
 
@@ -14,9 +14,17 @@ _SEARCH_PATTERNS = [
 ]
 
 _NOTEPAD_TYPE_PATTERNS = [
+    re.compile(
+        r"^打开记事本"
+        r"(?:并|,|，)?"
+        r"(?:在记事本(?:里|中)?)?"
+        r"输入[「」\"']?(.+?)[」」\"']?"
+        r"[,，]?\s*并\s*保存"
+        r"(?:到[「」\"']?(.+?)[」」\"']?)?$",
+        re.I,
+    ),
     re.compile(r"^打开记事本(?:并|,|，)?(?:在记事本(?:里|中)?)?输入(.+)$", re.I),
     re.compile(r"^(?:在记事本(?:里|中)?)输入(.+)$", re.I),
-    re.compile(r"^打开记事本$", re.I),
 ]
 
 _GUI_PATTERNS = [
@@ -54,6 +62,49 @@ def _resolve_type_content(raw: str) -> str:
     return content
 
 
+def _safe_filename_from_content(content: str) -> str:
+    stem = re.sub(r'[<>:"/\\|?*\s]+', "_", content.strip())[:32] or "note"
+    if not stem.lower().endswith(".txt"):
+        stem += ".txt"
+    return stem
+
+
+def _notepad_type_save_plan(content: str, save_hint: str = "") -> ExecutionPlan:
+    text = _resolve_type_content(content)
+    filename = save_hint.strip() if save_hint else _safe_filename_from_content(text)
+    if filename and not filename.lower().endswith(".txt"):
+        filename = f"{filename}.txt"
+    return ExecutionPlan(
+        plan_id=str(uuid.uuid4()),
+        summary=f"打开记事本、输入「{text}」并保存",
+        steps=[
+            PlanStep(
+                step_id=1,
+                tool="notepad_type_save",
+                params={"text": text, "filename": filename, "open": True},
+                risk_level="L1",
+                description=f"记事本粘贴「{text}」并保存为 {filename}",
+            ),
+        ],
+    )
+
+
+def _notepad_open_plan() -> ExecutionPlan:
+    return ExecutionPlan(
+        plan_id=str(uuid.uuid4()),
+        summary="打开记事本",
+        steps=[
+            PlanStep(
+                step_id=1,
+                tool="open_app",
+                params={"name": "notepad", "focus": True},
+                risk_level="L1",
+                description="打开并置前记事本",
+            ),
+        ],
+    )
+
+
 def _notepad_type_plan(content: str) -> ExecutionPlan:
     text = _resolve_type_content(content)
     return ExecutionPlan(
@@ -65,12 +116,12 @@ def _notepad_type_plan(content: str) -> ExecutionPlan:
                 tool="open_app",
                 params={"name": "notepad", "focus": True},
                 risk_level="L1",
-                description="打开并聚焦记事本",
+                description="打开并置前记事本",
             ),
             PlanStep(
                 step_id=2,
                 tool="type_text",
-                params={"text": text, "app": "notepad"},
+                params={"text": text},
                 risk_level="L1",
                 description=f"在记事本中输入「{text}」",
             ),
@@ -101,8 +152,32 @@ def _search_plan(query: str) -> ExecutionPlan:
     )
 
 
+def match_atomic_plan(text: str) -> ExecutionPlan | None:
+    """确定性原子工具计划（不经 LLM 逐步选工具）：记事本一条龙等."""
+    raw = text.strip().replace("\u3000", " ")
+
+    if "\n" in raw:
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        if len(lines) >= 2 and "记事本" in lines[0]:
+            joined = " ".join(lines[1:])
+            m = re.match(
+                r"^(?:在记事本(?:里|中)?)?输入[「」\"']?(.+?)[」」\"']?[,，]?\s*并\s*保存",
+                joined,
+                re.I,
+            )
+            if m:
+                return _notepad_type_save_plan(m.group(1))
+
+    norm = normalize_intent(raw)
+    save_match = _NOTEPAD_TYPE_PATTERNS[0].match(norm)
+    if save_match:
+        return _notepad_type_save_plan(save_match.group(1), save_match.group(2) or "")
+
+    return None
+
+
 def match_quick_plan(text: str) -> ExecutionPlan | None:
-    """已废弃：执行捷径不再接入主路径，仅保留供单元测试对照。"""
+    """高置信度桌面捷径：命中则跳过 LLM 循环，直接按步骤执行."""
     raw = text.strip().replace("\u3000", " ")
 
     # 多行须在 normalize 合并空格之前处理
@@ -110,6 +185,13 @@ def match_quick_plan(text: str) -> ExecutionPlan | None:
         lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
         if len(lines) >= 2 and "记事本" in lines[0]:
             joined = " ".join(lines[1:])
+            m = re.match(
+                r"^(?:在记事本(?:里|中)?)?输入[「」\"']?(.+?)[」」\"']?[,，]?\s*并\s*保存",
+                joined,
+                re.I,
+            )
+            if m:
+                return _notepad_type_save_plan(m.group(1))
             m = re.match(r"^(?:在记事本(?:里|中)?)?输入(.+)$", joined, re.I)
             if m:
                 return _notepad_type_plan(m.group(1))
@@ -123,7 +205,14 @@ def match_quick_plan(text: str) -> ExecutionPlan | None:
         if m and m.group(1).strip():
             return _gui_agent_plan(m.group(1))
 
-    for pattern in _NOTEPAD_TYPE_PATTERNS[:2]:
+    # 带保存的记事本指令优先匹配
+    save_match = _NOTEPAD_TYPE_PATTERNS[0].match(text)
+    if save_match:
+        content = save_match.group(1)
+        save_hint = save_match.group(2) or ""
+        return _notepad_type_save_plan(content, save_hint)
+
+    for pattern in _NOTEPAD_TYPE_PATTERNS[1:]:
         m = pattern.match(text)
         if m:
             return _notepad_type_plan(m.group(1))
@@ -143,8 +232,8 @@ def match_quick_plan(text: str) -> ExecutionPlan | None:
             ],
         )
 
-    if text in ("打开记事本", "打开 notepad") or re.match(r"^打开记事本(?:并|,|，)?", text, re.I):
-        return _gui_agent_plan("打开记事本并激活到前台最前，确保窗口可见")
+    if text in ("打开记事本", "打开 notepad"):
+        return _notepad_open_plan()
 
     if re.match(r"^关闭记事本", text, re.I):
         return _gui_agent_plan("关闭记事本窗口")
@@ -174,8 +263,5 @@ def match_quick_plan(text: str) -> ExecutionPlan | None:
         m = pattern.match(text)
         if m and m.group(1).strip():
             return _search_plan(m.group(1))
-
-    if should_use_gui_agent(text):
-        return _gui_agent_plan(text)
 
     return None

@@ -42,6 +42,24 @@ def workspace_dir() -> Path:
     return ws.resolve()
 
 
+def default_save_dir() -> Path:
+    """用户配置的默认保存目录；未配置时等同工作区."""
+    try:
+        from sensehub.config.user_settings import get_default_save_path
+
+        custom = get_default_save_path()
+    except Exception:
+        custom = ""
+    if custom:
+        try:
+            p = Path(custom).expanduser().resolve()
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except OSError:
+            pass
+    return workspace_dir()
+
+
 def _policy_whitelist() -> list[Path]:
     policies = get_settings().policies.get("execution", {})
     dirs = policies.get("file_whitelist_dirs") or []
@@ -100,7 +118,7 @@ def add_runtime_grant(path_str: str) -> Path:
 
 
 def writable_roots() -> list[Path]:
-    roots = [workspace_dir(), *_policy_whitelist(), *_runtime_grants()]
+    roots = [workspace_dir(), default_save_dir(), *_policy_whitelist(), *_runtime_grants()]
     seen: set[str] = set()
     out: list[Path] = []
     for r in roots:
@@ -143,7 +161,7 @@ def resolve_path(path_str: str) -> Path:
         raise ValueError("path 不能为空")
     p = Path(path_str).expanduser()
     if not p.is_absolute():
-        p = (workspace_dir() / p).resolve()
+        p = (default_save_dir() / p).resolve()
     else:
         p = p.resolve()
     return p
@@ -209,11 +227,19 @@ def path_needs_confirm(path_str: str, operation: Operation = "write") -> bool:
     except ValueError:
         return True
     ws = workspace_dir()
+    save_dir = default_save_dir()
     try:
         path.relative_to(ws)
         return False
     except ValueError:
-        return True
+        pass
+    if str(save_dir) != str(ws):
+        try:
+            path.relative_to(save_dir)
+            return False
+        except ValueError:
+            pass
+    return True
 
 
 def grant_paths_on_confirm(steps: list[Any]) -> list[str]:
@@ -241,14 +267,22 @@ def grant_paths_on_confirm(steps: list[Any]) -> list[str]:
 
 def describe_for_planner() -> str:
     ws = workspace_dir()
+    save_dir = default_save_dir()
     writable = writable_roots()
     lines = [
         "\n### 沙箱与权限（通用规则，禁止为单个案例写死逻辑）",
         f"- 默认工作区（可自由读写）：{ws}",
-        "- 相对路径均解析到工作区下",
+    ]
+    if str(save_dir) != str(ws):
+        lines.append(f"- 用户默认保存路径（相对路径优先落盘于此）：{save_dir}")
+    else:
+        lines.append("- 相对路径默认解析到工作区；用户可在 Console 状态栏配置「默认保存路径」")
+    lines += [
+        "- 用户在对话中指定了绝对路径或其他目录时，从其指定路径保存",
         "- 工作区外写入：步骤须标记 risk_level=L2 且 requires_confirm=true，等用户点「确认」",
+        "- Word/Excel/PPT 等结构化文档：优先 generate_document；纯文本用 write_file",
         "- 无专用工具时：可组合 open_app / web_search / open_url / gui_agent / fetch_url 等迂回完成目标",
-        "- 需要文件结果：优先 write_file 到工作区，再把路径告诉用户",
+        "- 需要文件结果：优先 write_file / generate_document，再把路径告诉用户",
         "已授权可写目录：",
     ]
     for r in writable:

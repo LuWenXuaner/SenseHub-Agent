@@ -35,7 +35,7 @@ const zh: DocSectionMap = {
   text: {
     paragraphs: [
       "文本生成适用于对话、写作、摘要、翻译与代码补全。灵枢默认路由 Qwen3、DeepSeek-V3、Doubao 等模型，按角色脑（intent / planner / coder）自动选型。",
-      "Studio Chat 与 Console 均基于同一套文本能力：Chat 为纯对话，Console 可进一步触发工具执行与任务规划。",
+      "Chat 与 Console 均基于同一套文本能力：Chat 为纯对话，Console 可进一步触发工具执行与任务规划。",
     ],
     bullets: [
       "支持多轮对话与 system 提示词",
@@ -50,7 +50,7 @@ const zh: DocSectionMap = {
   ],
   "temperature": 0.7
 }`,
-    link: { label: "打开灵枢 Chat", to: "/studio" },
+    link: { label: "打开 Chat", to: "/studio" },
   },
   tools: {
     paragraphs: [
@@ -103,19 +103,19 @@ const zh: DocSectionMap = {
       "典型场景包括会议摘要、客服质检、播客章节标注等。",
     ],
     bullets: [
-      "Studio / Console 按住麦克风即可录音并转写",
+      "Chat / Console 按住麦克风即可录音并转写",
       "转写文本可继续送入文本模型做摘要或翻译",
       "长音频建议先切片再分批处理",
     ],
   },
   voice: {
     paragraphs: [
-      "语音识别（ASR）将用户语音转为文本，是 Console 语音指令与 Studio 语音输入的基础能力。",
+      "语音识别（ASR）将用户语音转为文本，是 Console 语音指令与 Chat 语音输入的基础能力。",
       "灵枢集成 SenseVoice 等引擎，支持中文普通话及多种方言场景（以实际部署配置为准）。",
     ],
     bullets: [
       "Console：唤醒词「灵枢」后可说出完整指令",
-      "Studio：输入框旁麦克风按钮，松手即发送转写结果",
+      "Chat：输入框旁麦克风按钮，松手即发送转写结果",
       "音频格式：浏览器端通常为 webm/opus，服务端自动转换",
     ],
     link: { label: "Console 语音说明", to: "/claw" },
@@ -123,7 +123,7 @@ const zh: DocSectionMap = {
   asr: {
     paragraphs: [
       "SenseVoice 提供高精度、低延迟的流式与非流式识别，适合实时对话与长语音文件转写。",
-      "调用方式：Console / Studio 内置；API 用户可通过 /api/voice/transcribe 等端点上传音频（需登录与相应档位）。",
+      "调用方式：Console / Chat 内置；API 用户可通过 /api/voice/transcribe 等端点上传音频（需登录与相应档位）。",
     ],
     bullets: [
       "支持标点恢复与语气词过滤",
@@ -178,7 +178,7 @@ const en: DocSectionMap = {
   text: {
     paragraphs: [
       "Text generation covers chat, writing, summarization, translation, and code. SenseHub routes Qwen3, DeepSeek-V3, Doubao by brain role (intent / planner / coder).",
-      "Studio Chat is dialog-only; Console can plan and execute tools on top of the same models.",
+      "Chat is dialog-only; Console can plan and execute tools on top of the same models.",
     ],
     bullets: ["Multi-turn + system prompts", "Standard temperature / max_tokens", "Stronger models on Pro / Max"],
     link: { label: "Open Chat", to: "/studio" },
@@ -209,13 +209,13 @@ const en: DocSectionMap = {
     paragraphs: [
       "Audio understanding covers spoken content analysis—often paired with ASR transcripts for summarization or QA.",
     ],
-    bullets: ["Hold-to-talk in Studio / Console", "Chain ASR → text model for summaries", "Split long audio before batching"],
+    bullets: ["Hold-to-talk in Chat / Console", "Chain ASR → text model for summaries", "Split long audio before batching"],
   },
   voice: {
     paragraphs: [
-      "ASR converts speech to text for Console voice commands and Studio mic input.",
+      "ASR converts speech to text for Console voice commands and Chat mic input.",
     ],
-    bullets: ["Wake word in Console", "Mic button in Studio", "Typical browser audio: webm/opus"],
+    bullets: ["Wake word in Console", "Mic button in Chat", "Typical browser audio: webm/opus"],
     link: { label: "Console", to: "/claw" },
   },
   asr: {

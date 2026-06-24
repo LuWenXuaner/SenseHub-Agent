@@ -6,6 +6,7 @@ export type ClawSessionApi = {
   sessionId: string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
+  newSession: () => void;
 };
 
 type ClawSessionCtx = {

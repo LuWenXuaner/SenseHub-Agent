@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
+from sensehub.config.brain_routes import get_brain_presets, get_role_meta
 from sensehub.db.database import get_connection
 from sensehub.settings import get_settings
 
@@ -173,26 +175,39 @@ def get_api_config_public() -> dict:
         for pid, meta in catalog.items()
     ]
 
+    user_routes = get_user_role_routes()
     roles_out = []
     for role, row in roles_cfg.items():
         if not isinstance(row, dict):
             continue
-        pid = str(row.get("provider") or "")
-        prov = next((p for p in providers_out if p["id"] == pid), None)
+        default_provider = str(row.get("provider") or "")
+        default_model = str(row.get("model") or "")
+        effective_provider, effective_model = resolve_role_binding(role)
+        prov = next((p for p in providers_out if p["id"] == effective_provider), None)
+        meta = get_role_meta(role)
         roles_out.append(
             {
                 "role": role,
-                "provider": pid,
-                "provider_label": prov["label"] if prov else pid,
-                "model": row.get("model", ""),
+                "label_zh": str(meta.get("label_zh") or role),
+                "label_en": str(meta.get("label_en") or role),
+                "provider": effective_provider,
+                "provider_label": prov["label"] if prov else effective_provider,
+                "model": effective_model,
+                "default_provider": default_provider,
+                "default_model": default_model,
                 "description": row.get("description", ""),
+                "description_zh": str(meta.get("description_zh") or row.get("description") or ""),
+                "description_en": str(meta.get("description_en") or row.get("description") or ""),
                 "configured": bool(prov and prov["configured"]),
+                "user_override": role in user_routes,
             }
         )
 
     return {
         "providers": providers_out,
         "roles": roles_out,
+        "role_routes": user_routes,
+        "brain_presets": get_brain_presets(),
         "planner_model": overrides.get("planner_model") or roles_cfg.get("planner", {}).get("model", ""),
         "vision_model": overrides.get("vision_model") or roles_cfg.get("vision", {}).get("model", ""),
         "chat_model": overrides.get("chat_model") or roles_cfg.get("intent", {}).get("model", ""),
@@ -245,6 +260,26 @@ def update_api_config(payload: dict[str, Any]) -> dict:
             providers[pid] = row
     current["providers"] = providers
 
+    if isinstance(payload.get("role_routes"), dict):
+        routes = dict(current.get("role_routes") or {}) if isinstance(current.get("role_routes"), dict) else {}
+        for role, row in payload["role_routes"].items():
+            if not isinstance(row, dict):
+                continue
+            role_key = str(role).strip()
+            if not role_key:
+                continue
+            provider = str(row.get("provider") or "").strip()
+            model = str(row.get("model") or "").strip()
+            if not provider and not model:
+                routes.pop(role_key, None)
+                continue
+            if provider and model:
+                routes[role_key] = {"provider": provider, "model": model}
+        if routes:
+            current["role_routes"] = routes
+        else:
+            current.pop("role_routes", None)
+
     _save_raw(current)
     return get_api_config_public()
 
@@ -253,6 +288,38 @@ def clear_api_overrides() -> dict:
     with get_connection() as conn:
         conn.execute("DELETE FROM security_settings WHERE key = 'user_api_config'")
     return get_api_config_public()
+
+
+def get_default_save_path() -> str:
+    return str(_load_raw().get("default_save_path") or "").strip()
+
+
+def set_default_save_path(path_str: str) -> str:
+    """设置 Console 默认保存路径，并加入沙箱可写授权."""
+    from sensehub.security.sandbox import add_runtime_grant
+
+    path_str = str(path_str or "").strip()
+    current = _load_raw()
+    if not path_str:
+        current.pop("default_save_path", None)
+        _save_raw(current)
+        return ""
+    p = Path(path_str).expanduser().resolve()
+    p.mkdir(parents=True, exist_ok=True)
+    add_runtime_grant(str(p))
+    current["default_save_path"] = str(p)
+    _save_raw(current)
+    return str(p)
+
+
+def get_console_settings_public() -> dict[str, str]:
+    from sensehub.security.sandbox import workspace_dir
+
+    save = get_default_save_path()
+    return {
+        "default_save_path": save,
+        "workspace": str(workspace_dir()),
+    }
 
 
 def get_role_model(role: str) -> str | None:
@@ -268,3 +335,52 @@ def get_role_model(role: str) -> str | None:
     if key and overrides.get(key):
         return str(overrides[key])
     return None
+
+
+def _default_role_binding(role: str) -> tuple[str, str]:
+    roles_cfg = get_settings().models_config.get("roles") or {}
+    row = roles_cfg.get(role)
+    if not isinstance(row, dict):
+        row = roles_cfg.get("planner", {})
+    if not isinstance(row, dict):
+        row = {}
+    provider = str(row.get("provider") or "siliconflow").strip()
+    model = str(row.get("model") or "Qwen/Qwen3-8B").strip()
+    return provider, model
+
+
+def resolve_role_binding(role: str) -> tuple[str, str]:
+    """返回生效的 (provider, model)。用户 role_routes 优先，其次旧版单模型覆盖."""
+    default_provider, default_model = _default_role_binding(role)
+    overrides = _load_raw()
+
+    role_routes = overrides.get("role_routes")
+    if isinstance(role_routes, dict) and role in role_routes:
+        row = role_routes[role]
+        if isinstance(row, dict):
+            provider = str(row.get("provider") or "").strip()
+            model = str(row.get("model") or "").strip()
+            if provider and model:
+                return provider, model
+
+    legacy_model = get_role_model(role)
+    if legacy_model:
+        return default_provider, legacy_model
+
+    return default_provider, default_model
+
+
+def get_user_role_routes() -> dict[str, dict[str, str]]:
+    overrides = _load_raw()
+    raw = overrides.get("role_routes")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for role, row in raw.items():
+        if not isinstance(row, dict):
+            continue
+        provider = str(row.get("provider") or "").strip()
+        model = str(row.get("model") or "").strip()
+        if provider and model:
+            out[str(role)] = {"provider": provider, "model": model}
+    return out

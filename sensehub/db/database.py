@@ -188,6 +188,23 @@ CREATE TABLE IF NOT EXISTS user_plugins (
     updated_at TEXT DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, plugin_id)
 );
+
+CREATE TABLE IF NOT EXISTS llm_token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    role TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    request_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, day, role, provider, model)
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_token_usage_user_day ON llm_token_usage(user_id, day);
 """
 
 
@@ -220,6 +237,38 @@ def _migrate(conn: sqlite3.Connection) -> None:
     sess_cols = {r[1] for r in conn.execute("PRAGMA table_info(sessions)").fetchall()}
     if "channel" not in sess_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN channel TEXT NOT NULL DEFAULT 'hub'")
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS user_gamification (
+            user_id TEXT PRIMARY KEY,
+            xp INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 1,
+            profile_bg TEXT DEFAULT 'default',
+            profile_theme TEXT DEFAULT 'default',
+            milestone_claimed_json TEXT DEFAULT '[]',
+            weekend_checkins INTEGER DEFAULT 0,
+            updated_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(user_id) REFERENCES users(user_id)
+        );
+        CREATE TABLE IF NOT EXISTS user_achievements (
+            user_id TEXT NOT NULL,
+            achievement_id TEXT NOT NULL,
+            unlocked_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, achievement_id)
+        );
+        CREATE TABLE IF NOT EXISTS wheel_spins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            prize_id TEXT NOT NULL,
+            prize_label TEXT NOT NULL,
+            points_won INTEGER NOT NULL DEFAULT 0,
+            cost INTEGER NOT NULL DEFAULT 0,
+            spin_date TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_wheel_spins_user_day ON wheel_spins(user_id, spin_date);
+        """
+    )
     _seed_admin_if_empty(conn)
 
 

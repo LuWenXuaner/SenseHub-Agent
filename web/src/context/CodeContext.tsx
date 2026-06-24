@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   codeTitleFromMessages,
   createCodeSession,
@@ -8,6 +8,8 @@ import {
   type CodeMessage,
   type CodeSession,
 } from "@/lib/codeSessions";
+import { userStorageScope } from "@/lib/userScope";
+import { useAuth } from "@/context/AuthContext";
 
 type CodeCtx = {
   sessions: CodeSession[];
@@ -24,17 +26,29 @@ type CodeCtx = {
 const CodeContext = createContext<CodeCtx | null>(null);
 
 export function CodeProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const scope = userStorageScope(user?.username);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const initial = loadCodeSessions();
-  const bootstrap = initial[0] ?? createCodeSession();
-  const [sessions, setSessions] = useState<CodeSession[]>(initial.length ? initial : [bootstrap]);
-  const [sessionId, setSessionId] = useState(bootstrap.id);
-  const [messages, setMessages] = useState<CodeMessage[]>(bootstrap.messages);
+  const [sessions, setSessions] = useState<CodeSession[]>([]);
+  const [sessionId, setSessionId] = useState("");
+  const [messages, setMessages] = useState<CodeMessage[]>([]);
 
-  const persist = useCallback((nextSessions: CodeSession[]) => {
-    setSessions(nextSessions);
-    saveCodeSessions(nextSessions);
-  }, []);
+  const persist = useCallback(
+    (nextSessions: CodeSession[]) => {
+      setSessions(nextSessions);
+      saveCodeSessions(nextSessions, scope);
+    },
+    [scope]
+  );
+
+  useEffect(() => {
+    const initial = loadCodeSessions(scope);
+    const bootstrap = initial[0] ?? createCodeSession();
+    const list = initial.length ? initial : [bootstrap];
+    setSessions(list);
+    setSessionId(bootstrap.id);
+    setMessages(bootstrap.messages);
+  }, [scope]);
 
   const persistMessages = useCallback(
     (msgs: CodeMessage[], projectName?: string) => {
@@ -49,11 +63,11 @@ export function CodeProvider({ children }: { children: ReactNode }) {
           projectName: projectName ?? current.projectName,
         };
         const next = upsertCodeSession(prev, updated);
-        saveCodeSessions(next);
+        saveCodeSessions(next, scope);
         return next;
       });
     },
-    [sessionId]
+    [sessionId, scope]
   );
 
   const newSession = useCallback(() => {

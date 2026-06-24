@@ -58,6 +58,10 @@ LEDGER_TYPE_LABELS = {
     "redeem": "积分兑换",
     "subscribe": "订阅套餐",
     "bonus": "管理员发放",
+    "wheel_spin": "幸运转盘",
+    "wheel_prize": "转盘奖励",
+    "achievement": "成就奖励",
+    "milestone": "等级里程碑",
 }
 
 TIER_RANK = {"lite": 0, "pro": 1, "max": 2}
@@ -241,8 +245,15 @@ def check_in(username: str) -> dict[str, Any]:
         bonus = POINTS_SIGNIN_STREAK_BONUS
         earned += bonus
 
+    from sensehub.db.gamification import is_weekend_double, on_checkin
+
+    weekend = is_weekend_double()
+    daily_pts = POINTS_SIGNIN_DAILY * (2 if weekend else 1)
+    earned = daily_pts + bonus
+
     with get_connection() as conn:
-        _add_ledger(conn, user_id, POINTS_SIGNIN_DAILY, "checkin", note="每日签到")
+        note = "每日签到（周末双倍）" if weekend else "每日签到"
+        _add_ledger(conn, user_id, daily_pts, "checkin", note=note)
         if bonus:
             _add_ledger(conn, user_id, bonus, "checkin_bonus", note=f"连续签到 {POINTS_SIGNIN_STREAK_DAYS} 天")
         conn.execute(
@@ -252,7 +263,14 @@ def check_in(username: str) -> dict[str, Any]:
             (today, streak, user_id),
         )
         row = conn.execute("SELECT points_balance FROM user_wallets WHERE user_id = ?", (user_id,)).fetchone()
-    return {"ok": True, "earned": earned, "balance": int(row["points_balance"]), "streak": streak}
+    on_checkin(user_id, weekend=weekend)
+    return {
+        "ok": True,
+        "earned": earned,
+        "balance": int(row["points_balance"]),
+        "streak": streak,
+        "weekend_double": weekend,
+    }
 
 
 def redeem_item(username: str, item_id: str) -> dict[str, Any]:
@@ -528,7 +546,15 @@ def bills_summary(username: str) -> dict[str, Any]:
             (user_id,),
         ).fetchone()
     total = int(row["total"]) if row else 0
-    return {"total_spent": total, "token_usage": 0, "asr_seconds": 0, "plugin_calls": 0}
+    from sensehub.db.token_usage import token_usage_summary
+
+    usage = token_usage_summary(username)
+    return {
+        "total_spent": total,
+        "token_usage": int(usage.get("total_tokens") or 0),
+        "asr_seconds": 0,
+        "plugin_calls": int(usage.get("request_count") or 0),
+    }
 
 
 def invite_stats(username: str) -> dict[str, Any]:

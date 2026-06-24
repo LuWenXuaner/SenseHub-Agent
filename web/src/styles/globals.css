@@ -370,6 +370,40 @@ body {
   color: var(--mimo-text);
 }
 
+.mimo-nav-dropdown-trigger:hover,
+.mimo-nav-dropdown-open {
+  color: var(--mimo-text);
+}
+
+.mimo-nav-dropdown-open .mimo-nav-dropdown-chevron {
+  opacity: 0.85;
+  color: var(--mimo-text);
+}
+
+.mimo-nav-dropdown-chevron {
+  opacity: 0.5;
+}
+
+.mimo-nav-dropdown-bridge {
+  @apply absolute left-0 top-full z-50 pt-2;
+}
+
+.mimo-nav-dropdown-panel {
+  @apply min-w-[15rem] max-w-xs rounded-xl border py-2 shadow-lg;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-nav-dropdown-item {
+  @apply block px-4 py-2.5 text-sm transition;
+  color: var(--mimo-text);
+}
+
+.mimo-nav-dropdown-item:hover {
+  background: var(--mimo-warm);
+  color: var(--mimo-text);
+}
+
 .mimo-icon-btn {
   @apply inline-flex h-9 w-9 items-center justify-center rounded-full text-mimo-muted transition;
 }
@@ -1211,6 +1245,17 @@ body {
   background: #ffffff;
 }
 
+.mimo-qr-placeholder-compact {
+  width: 64px;
+  height: 64px;
+  padding: 3px;
+  border-color: var(--mimo-border);
+}
+
+.mimo-qr-block-compact {
+  @apply shrink-0;
+}
+
 .mimo-qr-label {
   @apply mt-3 text-xs;
   color: rgba(255, 255, 255, 0.55);
@@ -1252,6 +1297,15 @@ body {
 .mimo-news-grid {
   @apply grid gap-4;
   grid-template-columns: repeat(4, 1fr);
+}
+
+.mimo-news-pager-controls {
+  @apply mt-6 flex items-center justify-center gap-4;
+}
+
+.mimo-news-pager-controls .mimo-carousel-btn-bottom:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1024px) {
@@ -1407,13 +1461,68 @@ body {
 }
 
 .mimo-studio-model-menu {
-  @apply absolute left-0 top-[calc(100%+6px)] z-50 w-80 overflow-hidden rounded-xl border py-1 shadow-lg;
+  @apply absolute left-0 top-[calc(100%+6px)] z-50 w-56 rounded-xl border py-1 shadow-lg;
   border-color: var(--mimo-border);
   background: #ffffff;
 }
 
+.mimo-studio-model-menu-flyout {
+  overflow: visible;
+}
+
+.mimo-studio-model-group-row {
+  position: relative;
+}
+
+.mimo-studio-model-group-row-active .mimo-studio-model-group-toggle {
+  background: var(--mimo-warm);
+  color: var(--mimo-text);
+}
+
+.mimo-studio-model-flyout {
+  @apply absolute left-full top-0 z-[60] ml-1.5 w-72 overflow-hidden rounded-xl border py-1 shadow-lg;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+  max-height: min(24rem, 70vh);
+}
+
+.mimo-studio-model-flyout-title {
+  @apply border-b px-3 py-2 text-xs font-medium;
+  border-color: var(--mimo-border);
+  color: var(--mimo-muted);
+}
+
+.mimo-studio-model-flyout-list {
+  @apply max-h-[min(22rem,65vh)] overflow-y-auto py-1;
+}
+
+.mimo-studio-model-group + .mimo-studio-model-group {
+  border-top: 1px solid color-mix(in srgb, var(--mimo-border) 80%, transparent);
+}
+
+.mimo-studio-model-group-row + .mimo-studio-model-group-row {
+  border-top: 1px solid color-mix(in srgb, var(--mimo-border) 80%, transparent);
+}
+
+.mimo-studio-model-group-toggle {
+  @apply flex w-full items-center px-3 py-2.5 text-left text-sm transition;
+  color: var(--mimo-text);
+}
+
+.mimo-studio-model-group-toggle:hover {
+  background: var(--mimo-warm);
+}
+
+.mimo-studio-model-group-list {
+  @apply pb-1;
+}
+
 .mimo-studio-model-option {
-  @apply flex w-full items-start gap-3 px-4 py-3 text-left text-sm transition;
+  @apply flex w-full items-center gap-2 px-4 py-3 text-left text-sm transition;
+}
+
+.mimo-studio-model-option-compact {
+  @apply py-2 pl-8 pr-3;
 }
 
 .mimo-studio-model-option:hover {
@@ -1462,6 +1571,80 @@ body {
 .mimo-studio-prompt-card:hover {
   border-color: color-mix(in srgb, var(--mimo-accent) 35%, var(--mimo-border));
   color: var(--mimo-text);
+}
+
+.mimo-studio-chat-area {
+  @apply mx-auto max-w-3xl;
+}
+
+.mimo-studio-chat-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.mimo-studio-chat-avatar-slot {
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.mimo-studio-chat-row {
+  @apply flex items-start gap-3;
+  margin-bottom: 1.35rem;
+}
+
+.mimo-studio-chat-row-continued {
+  margin-bottom: 0.7rem;
+}
+
+.mimo-studio-chat-row-user {
+  @apply flex-row-reverse;
+}
+
+.mimo-studio-chat-bubble {
+  @apply max-w-[min(100%,40rem)] rounded-2xl text-sm;
+  line-height: 1.85;
+}
+
+.mimo-studio-chat-bubble-user {
+  @apply px-3.5 py-2;
+  background: linear-gradient(180deg, #e8f6ff 0%, #dff0fc 100%);
+  color: var(--mimo-text);
+  box-shadow: 0 2px 8px rgba(56, 148, 220, 0.12), 0 1px 2px rgba(56, 148, 220, 0.06);
+}
+
+.mimo-studio-chat-bubble-assistant {
+  @apply px-4 py-3;
+  background: linear-gradient(180deg, #fffefb 0%, #f8f6f2 100%);
+  color: var(--mimo-text);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.mimo-studio-chat-bubble-assistant .chat-markdown-studio {
+  @apply leading-[1.85];
+}
+
+.mimo-studio-harness summary {
+  list-style: none;
+}
+
+.mimo-studio-harness summary::-webkit-details-marker {
+  display: none;
+}
+
+.mimo-studio-chat-bubble-user .chat-markdown {
+  @apply leading-[1.75] text-mimo-text;
+}
+
+.mimo-studio-chat-bubble-user .chat-markdown p {
+  @apply mb-1 last:mb-0;
 }
 
 .mimo-studio-input-wrap {
@@ -1990,6 +2173,54 @@ a.mimo-docs-tab.router-link-active {
   transform: translateX(16px);
 }
 
+.mimo-token-export-dialog {
+  @apply relative max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-2xl border p-6 shadow-xl md:p-8;
+  border-color: var(--mimo-border);
+  background: linear-gradient(180deg, #faf7f5 0%, #ffffff 100%);
+}
+
+.mimo-token-export-section {
+  @apply mt-4 rounded-xl border p-3;
+  border-color: var(--mimo-border);
+  background: #fff;
+}
+
+.mimo-token-export-check,
+.mimo-token-export-radio {
+  @apply flex cursor-pointer items-start gap-2 text-sm;
+}
+
+.mimo-token-export-check input,
+.mimo-token-export-radio input {
+  @apply mt-0.5 shrink-0;
+}
+
+.mimo-token-export-sub {
+  @apply mt-2 space-y-2 border-t border-mimo-border pt-2 pl-1;
+}
+
+.mimo-token-export-link {
+  @apply text-xs text-[#1677ff] transition hover:underline;
+}
+
+.mimo-token-export-day-list {
+  @apply mt-2 max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2;
+  border-color: var(--mimo-border);
+  background: var(--mimo-warm);
+}
+
+.mimo-token-export-day-item {
+  @apply flex cursor-pointer flex-wrap items-center gap-2 rounded-md px-2 py-1.5 text-xs transition hover:bg-white;
+}
+
+.mimo-token-export-day-date {
+  @apply min-w-[5.5rem] font-medium;
+}
+
+.mimo-token-export-day-meta {
+  @apply text-mimo-muted;
+}
+
 .mimo-token-plan-usage-toolbar {
   @apply flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between;
 }
@@ -2017,6 +2248,236 @@ a.mimo-docs-tab.router-link-active {
   content: "";
   @apply inline-block h-4 w-1 rounded-full;
   background: #c9a96e;
+}
+
+.mimo-token-chart-wrap {
+  @apply relative w-full;
+}
+
+.mimo-token-chart-card {
+  @apply w-full;
+}
+
+.mimo-usage-chart-panel {
+  @apply space-y-4 rounded-xl border border-mimo-border bg-gradient-to-b from-white to-[#faf8f5] p-4;
+}
+
+.dark .mimo-usage-chart-panel {
+  background: linear-gradient(180deg, var(--mimo-surface) 0%, color-mix(in srgb, var(--mimo-surface) 92%, #000) 100%);
+}
+
+.mimo-usage-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  min-height: 168px;
+  padding: 0.25rem 0.15rem 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.mimo-usage-bars[data-count="1"] .mimo-usage-bar-item {
+  max-width: 5.5rem;
+  margin: 0 auto;
+}
+
+.mimo-usage-bar-item {
+  flex: 0 0 auto;
+  width: 2.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mimo-usage-bar-value-zero {
+  @apply text-mimo-muted opacity-60;
+}
+
+.mimo-usage-bar-track-zero {
+  background: color-mix(in srgb, var(--mimo-border) 28%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--mimo-border) 75%, transparent);
+}
+
+.mimo-usage-bar-zero-mark {
+  width: 0.45rem;
+  height: 0.45rem;
+  margin: 0.35rem auto;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--mimo-muted) 55%, transparent);
+}
+
+.mimo-usage-bar-value {
+  @apply text-xs font-semibold tabular-nums text-mimo-text;
+}
+
+.mimo-usage-bar-track {
+  width: 100%;
+  height: 8.5rem;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--mimo-border) 45%, transparent);
+  padding: 0.35rem;
+}
+
+.mimo-usage-bar-fill {
+  width: 100%;
+  border-radius: 0.5rem;
+  transition: height 0.35s ease;
+}
+
+.mimo-usage-bars-token .mimo-usage-bar-fill {
+  background: linear-gradient(180deg, #e8d4a8 0%, #c9a96e 55%, #a8864a 100%);
+  box-shadow: 0 4px 14px color-mix(in srgb, #c9a96e 35%, transparent);
+}
+
+.mimo-usage-bars-request .mimo-usage-bar-fill {
+  background: linear-gradient(180deg, #69b1ff 0%, #1677ff 60%, #0958d9 100%);
+  box-shadow: 0 4px 14px color-mix(in srgb, #1677ff 28%, transparent);
+}
+
+.mimo-usage-bar-label {
+  @apply text-[11px] text-mimo-muted;
+}
+
+.mimo-usage-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.mimo-usage-metric-card {
+  @apply rounded-xl border px-4 py-3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mimo-usage-metric-prompt {
+  border-color: color-mix(in srgb, #c9a96e 45%, var(--mimo-border));
+  background: color-mix(in srgb, #c9a96e 8%, var(--mimo-surface));
+}
+
+.mimo-usage-metric-completion {
+  border-color: color-mix(in srgb, #1677ff 40%, var(--mimo-border));
+  background: color-mix(in srgb, #1677ff 7%, var(--mimo-surface));
+}
+
+.mimo-usage-metric-label {
+  @apply text-xs text-mimo-muted;
+}
+
+.mimo-usage-metric-value {
+  @apply text-lg font-semibold tabular-nums;
+}
+
+.mimo-usage-metric-pct {
+  @apply text-xs font-medium text-mimo-muted;
+}
+
+.mimo-token-chart-stack {
+  @apply space-y-3;
+}
+
+.mimo-token-chart-grid {
+  stroke: var(--mimo-border);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: 0.65;
+}
+
+.mimo-token-chart-axis {
+  fill: var(--mimo-muted);
+  font-size: 10px;
+}
+
+.mimo-token-chart-bar {
+  fill: url(#requestBarGradient);
+}
+
+.mimo-token-chart-tooltip {
+  @apply mx-auto mt-2 flex w-fit min-w-[8.5rem] flex-col gap-0.5 rounded-lg border border-mimo-border bg-mimo-surface px-3 py-2 text-xs shadow-md;
+}
+
+.mimo-token-chart-tooltip-placeholder {
+  @apply invisible min-h-[2.75rem] border-transparent bg-transparent shadow-none;
+}
+
+.mimo-token-chart-empty {
+  @apply flex min-h-[160px] items-center justify-center text-sm text-mimo-muted;
+}
+
+.mimo-token-model-chart {
+  @apply space-y-3;
+}
+
+.mimo-token-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) auto;
+  gap: 0.75rem 1rem;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .mimo-token-model-row {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .mimo-token-model-stats {
+    @apply flex-row items-center gap-2;
+  }
+}
+
+.mimo-token-model-meta {
+  @apply min-w-0;
+}
+
+.mimo-token-model-name {
+  @apply block truncate text-sm font-medium;
+}
+
+.mimo-token-model-sub {
+  @apply block truncate text-xs text-mimo-muted;
+}
+
+.mimo-token-model-bar-track {
+  @apply h-2.5 overflow-hidden rounded-full;
+  background: color-mix(in srgb, var(--mimo-border) 60%, transparent);
+}
+
+.mimo-token-model-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #c9a96e 0%, #e8d4a8 55%, #1677ff 100%);
+  transition: width 0.35s ease;
+}
+
+.mimo-token-model-stats {
+  @apply flex flex-col items-end text-xs font-medium tabular-nums;
+}
+
+.mimo-token-prompt-split {
+  @apply flex h-2.5 overflow-hidden rounded-full;
+}
+
+.mimo-token-prompt-legend {
+  @apply space-y-1.5 px-1;
+}
+
+.mimo-token-prompt-seg {
+  min-width: 2px;
+  transition: flex 0.3s ease;
+}
+
+.mimo-token-prompt-prompt {
+  background: linear-gradient(90deg, #c9a96e, #dfc18a);
+}
+
+.mimo-token-prompt-completion {
+  background: linear-gradient(90deg, #69b1ff, #1677ff);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2074,3 +2535,601 @@ a.mimo-docs-tab.router-link-active {
   background: var(--mimo-surface);
   border-color: var(--mimo-border);
 }
+
+/* —— 灵枢 Console 对话区 —— */
+.hub-chat-area {
+  @apply mx-auto flex w-full max-w-3xl flex-col gap-1 py-1;
+}
+
+.hub-chat-row {
+  @apply flex items-start gap-2.5;
+  margin-bottom: 1rem;
+}
+
+.hub-chat-row-user {
+  @apply flex-row-reverse;
+}
+
+.hub-chat-row-error .hub-chat-name {
+  color: var(--danger, #dc2626);
+}
+
+.hub-chat-main {
+  @apply flex min-w-0 max-w-[min(100%,40rem)] flex-col gap-1;
+}
+
+.hub-chat-row-user .hub-chat-main {
+  @apply items-end;
+}
+
+.hub-chat-name {
+  @apply px-1 text-[11px] font-medium tracking-wide text-text-secondary;
+}
+
+.hub-chat-avatar {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-sm;
+}
+
+.hub-chat-avatar-user {
+  @apply border-sky-200/80 bg-gradient-to-br from-sky-50 to-sky-100 text-sky-600;
+}
+
+.dark .hub-chat-avatar-user {
+  @apply border-sky-500/30 bg-gradient-to-br from-sky-950/80 to-sky-900/60 text-sky-300;
+}
+
+.hub-chat-avatar-agent {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+  background: linear-gradient(
+    to bottom right,
+    color-mix(in srgb, var(--primary) 15%, transparent),
+    color-mix(in srgb, var(--primary) 5%, transparent)
+  );
+}
+
+.hub-chat-bubble {
+  @apply rounded-2xl text-sm leading-relaxed;
+}
+
+.hub-chat-bubble-user {
+  @apply px-3.5 py-2.5 text-text-primary;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 12%, transparent) 0%, color-mix(in srgb, var(--primary) 8%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.hub-chat-bubble-agent {
+  @apply px-3.5 py-2.5 text-text-primary;
+  background: var(--surface-elevated, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.dark .hub-chat-bubble-agent {
+  background: color-mix(in srgb, var(--surface) 92%, white 8%);
+}
+
+.hub-chat-bubble-busy {
+  @apply inline-flex items-center gap-2 text-text-secondary;
+}
+
+.hub-chat-bubble-stopping {
+  border-color: color-mix(in srgb, var(--danger, #dc2626) 30%, transparent);
+  color: color-mix(in srgb, var(--danger, #dc2626) 85%, var(--text-secondary));
+}
+
+.hub-chat-bubble-error {
+  border-color: color-mix(in srgb, var(--danger, #dc2626) 35%, transparent);
+  background: color-mix(in srgb, var(--danger, #dc2626) 6%, var(--surface));
+}
+
+.hub-chat-thinking {
+  @apply mt-1 w-full;
+}
+
+/* Token Plan — tier depth + QR */
+.mimo-token-plan-qr-panel {
+  @apply mb-4 flex items-center gap-3 rounded-xl border px-3 py-2.5;
+  border-color: var(--mimo-border);
+  background: linear-gradient(135deg, #faf7f5 0%, #ffffff 100%);
+}
+
+.mimo-token-plan-qr-copy {
+  @apply min-w-0 flex-1;
+}
+
+.mimo-token-plan-card-plan--lite {
+  background: linear-gradient(135deg, #f5f8fc 0%, #fafcfe 50%, #ffffff 100%);
+}
+
+.mimo-token-plan-card-plan--standard,
+.mimo-token-plan-card-plan--pro {
+  background: linear-gradient(135deg, #f3eefb 0%, #f8f5fc 50%, #ffffff 100%);
+}
+
+.mimo-token-plan-card-plan--max {
+  background: linear-gradient(135deg, #f5ebe0 0%, #faf4ec 45%, #fffdf9 100%);
+  border-color: color-mix(in srgb, #c9a96e 28%, var(--mimo-border));
+}
+
+.mimo-token-plan-card-usage--lite {
+  background: #ffffff;
+}
+
+.mimo-token-plan-card-usage--standard,
+.mimo-token-plan-card-usage--pro {
+  background: linear-gradient(180deg, #faf8ff 0%, #ffffff 100%);
+}
+
+.mimo-token-plan-card-usage--max {
+  background: linear-gradient(180deg, #faf6f0 0%, #ffffff 100%);
+  border-color: color-mix(in srgb, #c9a96e 22%, var(--mimo-border));
+}
+
+/* Gamification / Engagement Hub — premium */
+.mimo-engage-hub {
+  @apply space-y-5;
+}
+
+.mimo-engage-teaser {
+  @apply flex items-center gap-3 rounded-2xl border p-4 transition hover:border-[#c9a96e]/40;
+  border-color: var(--mimo-border);
+  background: linear-gradient(135deg, #fffaf0 0%, #ffffff 100%);
+}
+
+.mimo-engage-hero {
+  @apply relative overflow-hidden rounded-3xl border px-5 py-6 md:px-8 md:py-8;
+  border-color: color-mix(in srgb, var(--engage-accent, #c9a96e) 35%, transparent);
+  background: linear-gradient(145deg, #0f1117 0%, #1a1f2e 42%, #12151f 100%);
+  color: #f5f0e8;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--engage-accent, #c9a96e) 20%, transparent),
+    0 24px 48px -24px rgba(0, 0, 0, 0.45);
+}
+
+.mimo-engage-hero-bg {
+  @apply pointer-events-none absolute inset-0;
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 20%, color-mix(in srgb, var(--engage-accent, #c9a96e) 28%, transparent), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(91, 140, 255, 0.22), transparent 50%);
+}
+
+.mimo-engage-hero-orbs span {
+  @apply pointer-events-none absolute rounded-full blur-3xl;
+  animation: mimo-engage-float 8s ease-in-out infinite;
+}
+
+.mimo-engage-hero-orbs span:nth-child(1) {
+  width: 120px;
+  height: 120px;
+  top: -20px;
+  right: 12%;
+  background: color-mix(in srgb, var(--engage-accent, #c9a96e) 35%, transparent);
+}
+
+.mimo-engage-hero-orbs span:nth-child(2) {
+  width: 80px;
+  height: 80px;
+  bottom: 10%;
+  left: 8%;
+  background: rgba(123, 97, 255, 0.25);
+  animation-delay: -3s;
+}
+
+.mimo-engage-hero-orbs span:nth-child(3) {
+  width: 60px;
+  height: 60px;
+  top: 40%;
+  right: 35%;
+  background: rgba(255, 214, 102, 0.2);
+  animation-delay: -5s;
+}
+
+@keyframes mimo-engage-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.05); }
+}
+
+.mimo-engage-hero-grid {
+  @apply relative z-[1] flex flex-col items-center gap-6 md:flex-row md:justify-between;
+}
+
+.mimo-engage-hero-main {
+  @apply min-w-0 flex-1 text-center md:text-left;
+}
+
+.mimo-engage-hero-chip {
+  @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: color-mix(in srgb, var(--engage-accent, #c9a96e) 80%, white);
+}
+
+.mimo-engage-hero-title {
+  @apply mt-3 text-2xl font-bold tracking-tight md:text-3xl;
+  text-shadow: 0 0 24px color-mix(in srgb, var(--engage-accent, #c9a96e) 40%, transparent);
+}
+
+.mimo-engage-hero-rating {
+  @apply text-lg font-medium opacity-70;
+}
+
+.mimo-engage-hero-xp {
+  @apply mt-2 text-sm tabular-nums text-white/75;
+}
+
+.mimo-engage-hero-stats {
+  @apply mt-4 flex flex-wrap justify-center gap-2 md:justify-start;
+}
+
+.mimo-engage-stat-pill {
+  @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mimo-engage-stat-pill-hot {
+  background: linear-gradient(90deg, rgba(255, 77, 79, 0.25), rgba(255, 169, 64, 0.2));
+  border-color: rgba(255, 169, 64, 0.35);
+  color: #ffc069;
+  animation: mimo-engage-pulse 2s ease-in-out infinite;
+}
+
+@keyframes mimo-engage-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 169, 64, 0.3); }
+  50% { box-shadow: 0 0 12px 2px rgba(255, 169, 64, 0.25); }
+}
+
+.mimo-engage-hero-ring-wrap {
+  @apply relative flex flex-col items-center;
+}
+
+.mimo-engage-level-ring {
+  @apply h-36 w-36 drop-shadow-lg;
+}
+
+.mimo-engage-ring-progress {
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mimo-engage-ring-lv {
+  fill: #fff;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.mimo-engage-ring-label {
+  fill: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.mimo-engage-hero-pct {
+  @apply mt-1 text-xs font-medium tabular-nums;
+  color: var(--engage-accent, #c9a96e);
+}
+
+.mimo-engage-milestone-rail {
+  @apply relative z-[1] mt-6 flex justify-between gap-1 border-t border-white/10 pt-5;
+}
+
+.mimo-engage-milestone-node {
+  @apply flex flex-1 flex-col items-center gap-1 text-center opacity-50;
+}
+
+.mimo-engage-milestone-node-done {
+  @apply opacity-100;
+}
+
+.mimo-engage-milestone-dot {
+  @apply h-2.5 w-2.5 rounded-full border-2 border-white/30 bg-transparent;
+}
+
+.mimo-engage-milestone-node-done .mimo-engage-milestone-dot {
+  background: var(--engage-accent, #c9a96e);
+  border-color: var(--engage-accent, #c9a96e);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--engage-accent, #c9a96e) 60%, transparent);
+}
+
+.mimo-engage-milestone-label {
+  @apply text-[10px] font-medium text-white/70;
+}
+
+.mimo-engage-milestone-reward {
+  @apply text-[10px] text-white/45;
+}
+
+.mimo-engage-grid-main {
+  @apply grid gap-5 lg:grid-cols-2;
+}
+
+.mimo-engage-panel {
+  @apply rounded-2xl border p-5 md:p-6;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-engage-panel-glow {
+  box-shadow: 0 4px 24px -8px rgba(15, 23, 42, 0.08);
+}
+
+.mimo-engage-panel-wide {
+  @apply col-span-full;
+}
+
+.mimo-engage-panel-head {
+  @apply flex items-start justify-between gap-3;
+}
+
+.mimo-engage-panel-icon {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl;
+  background: linear-gradient(135deg, #fff7e6, #fde8c8);
+  color: #8b6914;
+}
+
+.mimo-engage-panel-title {
+  @apply text-base font-semibold;
+}
+
+.mimo-engage-ach-progress {
+  @apply flex flex-col items-end rounded-xl px-3 py-1.5;
+  background: linear-gradient(135deg, #faf7f5, #fff);
+  border: 1px solid var(--mimo-border);
+}
+
+.mimo-engage-wheel-stage {
+  @apply relative mx-auto mt-6 flex h-52 w-52 items-center justify-center;
+}
+
+.mimo-engage-wheel-pointer {
+  @apply absolute left-1/2 top-0 z-20 -translate-x-1/2;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 18px solid #c9a96e;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.mimo-engage-wheel-disc {
+  @apply absolute inset-2 rounded-full border-4 border-[#8b6914]/30 shadow-inner transition-transform duration-[1100ms];
+  transition-timing-function: cubic-bezier(0.15, 0.85, 0.2, 1);
+}
+
+.mimo-engage-wheel-disc-spin {
+  /* transform set inline */
+}
+
+.mimo-engage-wheel-label {
+  @apply absolute left-1/2 top-1/2 origin-center text-[11px] font-bold text-[#5c3d00];
+  width: 24px;
+  margin-left: -12px;
+  margin-top: -7px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.mimo-engage-wheel-hub {
+  @apply relative z-10 flex h-14 w-14 items-center justify-center rounded-full border-4 border-[#c9a96e] bg-white shadow-lg;
+}
+
+.mimo-engage-spin-btn {
+  @apply rounded-xl border-0 px-4 py-2.5 text-sm font-semibold text-white transition;
+  background: linear-gradient(135deg, #d4a017 0%, #c9a96e 45%, #8b6914 100%);
+  box-shadow: 0 4px 14px -4px rgba(201, 169, 110, 0.6);
+}
+
+.mimo-engage-spin-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 6px 20px -4px rgba(201, 169, 110, 0.75);
+}
+
+.mimo-engage-spin-btn:disabled {
+  @apply opacity-50;
+}
+
+.mimo-engage-result {
+  @apply rounded-xl px-3 py-2 text-center text-sm;
+  background: #fafafa;
+}
+
+.mimo-engage-result-win {
+  background: linear-gradient(135deg, #fff7e6, #fff);
+  color: #8b6914;
+  animation: mimo-engage-pop 0.5s ease-out;
+}
+
+@keyframes mimo-engage-pop {
+  0% { transform: scale(0.95); opacity: 0; }
+  60% { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.mimo-engage-badge {
+  @apply relative flex flex-col items-center overflow-hidden rounded-2xl border p-4 transition;
+  border-color: var(--mimo-border);
+  min-height: 108px;
+}
+
+.mimo-engage-badge-unlocked {
+  border-color: color-mix(in srgb, #c9a96e 50%, var(--mimo-border));
+  background: linear-gradient(165deg, #fffbf0 0%, #ffffff 55%, #faf7f5 100%);
+  box-shadow: 0 4px 16px -8px rgba(201, 169, 110, 0.35);
+}
+
+.mimo-engage-badge-unlocked:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgba(201, 169, 110, 0.45);
+}
+
+.mimo-engage-badge-locked {
+  @apply opacity-40 grayscale;
+  background: #f5f5f5;
+}
+
+.mimo-engage-badge-shine {
+  @apply pointer-events-none absolute -inset-full;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
+  animation: mimo-engage-shine 4s ease-in-out infinite;
+}
+
+@keyframes mimo-engage-shine {
+  0%, 100% { transform: translateX(-100%) rotate(25deg); }
+  50% { transform: translateX(100%) rotate(25deg); }
+}
+
+.mimo-engage-badge-icon {
+  @apply flex h-11 w-11 items-center justify-center rounded-full;
+  background: linear-gradient(135deg, #fff7e6, #fde8c8);
+  color: #8b6914;
+}
+
+.mimo-engage-badge-name {
+  @apply mt-2 line-clamp-2 text-center text-xs font-semibold leading-tight;
+}
+
+.mimo-engage-badge-lock {
+  @apply absolute right-2 top-2 text-mimo-muted;
+}
+
+.mimo-engage-podium {
+  @apply mt-4 flex items-end justify-center gap-3 px-2;
+}
+
+.mimo-engage-podium-col {
+  @apply flex flex-1 max-w-[100px] flex-col items-center;
+}
+
+.mimo-engage-podium-avatar {
+  @apply mb-2 flex h-9 w-9 items-center justify-center rounded-full border-2 bg-white text-sm font-bold shadow;
+}
+
+.mimo-engage-podium-name {
+  @apply mb-2 max-w-full truncate text-center text-[11px] font-medium;
+}
+
+.mimo-engage-podium-bar {
+  @apply flex w-full items-end justify-center rounded-t-xl px-1 pb-2 pt-3;
+  min-width: 64px;
+}
+
+.mimo-engage-podium-score {
+  @apply text-[10px] font-bold text-[#333];
+}
+
+.mimo-engage-lb-row {
+  @apply flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition;
+  background: #fafafa;
+}
+
+.mimo-engage-lb-row:hover {
+  background: #f3f3f3;
+}
+
+.mimo-engage-lb-row-top {
+  background: linear-gradient(90deg, #fffbf0, #fafafa);
+}
+
+.mimo-engage-lb-rank {
+  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold;
+  background: #eee;
+  color: #666;
+}
+
+.mimo-engage-lb-rank-top {
+  background: linear-gradient(135deg, #ffd666, #ffc53d);
+  color: #5c3d00;
+}
+
+.mimo-engage-lb-rating {
+  @apply hidden text-xs text-mimo-muted sm:inline;
+}
+
+.mimo-engage-lb-score {
+  @apply text-sm font-semibold tabular-nums text-[#8b6914];
+}
+
+.mimo-engage-cosmetic {
+  @apply relative h-20 overflow-hidden rounded-xl border-2 border-transparent transition;
+}
+
+.mimo-engage-cosmetic:hover:not(:disabled) {
+  transform: scale(1.02);
+}
+
+.mimo-engage-cosmetic-active {
+  border-color: #c9a96e;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #c9a96e 25%, transparent);
+}
+
+.mimo-engage-cosmetic-locked {
+  @apply cursor-not-allowed opacity-40;
+}
+
+.mimo-engage-cosmetic-lock {
+  @apply absolute right-2 top-2 text-white drop-shadow;
+}
+
+.mimo-engage-cosmetic-label {
+  @apply absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2 py-2 text-center text-[11px] font-medium text-white;
+}
+
+.mimo-engage-theme-chip {
+  @apply inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition;
+  border-color: var(--chip-accent, #c9a96e);
+  color: var(--chip-accent, #c9a96e);
+}
+
+.mimo-engage-theme-chip:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--chip-accent, #c9a96e) 10%, white);
+}
+
+.mimo-engage-theme-chip-active {
+  background: color-mix(in srgb, var(--chip-accent, #c9a96e) 16%, white);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chip-accent, #c9a96e) 30%, transparent);
+}
+
+.mimo-engage-loading {
+  @apply space-y-5;
+}
+
+.mimo-engage-loading-hero {
+  @apply h-48 rounded-3xl;
+}
+
+.mimo-engage-loading-card {
+  @apply h-64 rounded-2xl;
+}
+
+.mimo-engage-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: mimo-engage-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes mimo-engage-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+html[data-console-theme="ocean"] {
+  --mimo-accent: #1677ff;
+}
+
+html[data-console-theme="forest"] {
+  --mimo-accent: #389e0d;
+}
+
+html[data-console-theme="rose"] {
+  --mimo-accent: #eb2f96;
+}
+
+html[data-console-theme="violet"] {
+  --mimo-accent: #722ed1;
+}
+
+html[data-console-theme="ember"] {
+  --mimo-accent: #fa541c;
+}
+

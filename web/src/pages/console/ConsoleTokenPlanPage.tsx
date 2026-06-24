@@ -3,16 +3,21 @@ import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/hooks/useWallet";
 import { TIER_PLANS, type TierId } from "@/lib/tierCatalog";
 import { ConsolePageFrame } from "@/components/mimo/ConsolePageFrame";
-import { ArrowUpRight, Copy, QrCode, RefreshCw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { TokenRequestChart, TokenUsageCharts } from "@/components/console/TokenUsageCharts";
+import { TokenUsageExportDialog } from "@/components/console/TokenUsageExportDialog";
+import { OfficialQrCode } from "@/components/marketing/OfficialQrCode";
+import { ArrowUpRight, Copy, RefreshCw } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
 import { useLocale } from "@/context/LocaleContext";
+import { api, type TokenUsageSummary } from "@/lib/api";
 
 const BASE_URLS = {
   openai: "https://api.lingshu.ai/v1",
   anthropic: "https://api.lingshu.ai/anthropic",
 };
 
-const MODEL_LIST = "Qwen3 · DeepSeek-V3 · Doubao · Qwen2.5-VL · SenseVoice · CosyVoice";
+const MODEL_LIST =
+  "Qwen3 · DeepSeek-V3 · Doubao · GPT · Claude · Grok · Gemini · Qwen2.5-VL · SenseVoice · CosyVoice";
 
 export function ConsoleTokenPlanPage() {
   const { license, refreshLicense } = useAuth();
@@ -28,6 +33,39 @@ export function ConsoleTokenPlanPage() {
   const [granularity, setGranularity] = useState<"year" | "month" | "day">("month");
   const [viewMode, setViewMode] = useState<"chart" | "list">("chart");
   const [tokenMode, setTokenMode] = useState<"total" | "perModel">("total");
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageSummary | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  const rangeDays = useMemo(() => {
+    if (granularity === "day") return 14;
+    if (granularity === "month") return 30;
+    return 90;
+  }, [granularity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTokenLoading(true);
+    api
+      .walletTokenUsage(rangeDays)
+      .then((data) => {
+        if (!cancelled) setTokenUsage(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTokenUsage(null);
+      })
+      .finally(() => {
+        if (!cancelled) setTokenLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rangeDays]);
+
+  const llmTotalTokens = tokenUsage?.total_tokens ?? 0;
+  const llmRequestCount = tokenUsage?.request_count ?? 0;
+
+  const chartDaily = tokenUsage?.daily ?? [];
 
   const maskedKey = `tp-lingshu-${(license?.tier ?? "lite").slice(0, 2)}****${String(license?.text_commands_used ?? 0).slice(-4).padStart(4, "0")}`;
   const used = license?.text_commands_used ?? 0;
@@ -58,6 +96,11 @@ export function ConsoleTokenPlanPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const handleExport = () => {
+    if (!tokenUsage) return;
+    setExportOpen(true);
+  };
+
   const benefitRows = [
     { label: tp.models, value: MODEL_LIST },
     { label: tp.quota, value: plan?.highlights.join(" · ") ?? "—" },
@@ -74,21 +117,23 @@ export function ConsoleTokenPlanPage() {
   return (
     <ConsolePageFrame
       title={tp.title}
-      headNote={
-        <Link to="/console/invite" className="mt-2 inline-flex items-center gap-1.5 text-sm text-mimo-muted transition hover:text-mimo-text">
-          <QrCode size={14} />
-          {tp.joinGroup}
-        </Link>
-      }
       actions={
         <Link to="/token-plan" className="mimo-console-primary-btn mimo-btn-sm">
           {tp.subscribePlan}
         </Link>
       }
     >
+      <div className="mimo-token-plan-qr-panel">
+        <OfficialQrCode label={tp.qrLabel} compact />
+        <div className="mimo-token-plan-qr-copy">
+          <h3 className="text-sm font-medium">{tp.joinGroup}</h3>
+          <p className="mt-0.5 text-xs leading-5 text-mimo-muted">{tp.joinGroupHint}</p>
+        </div>
+      </div>
+
       <div className="mimo-token-plan-section">
         <div className="mimo-token-plan-grid-top">
-          <div className="mimo-token-plan-card mimo-token-plan-card-plan">
+          <div className={`mimo-token-plan-card mimo-token-plan-card-plan mimo-token-plan-card-plan--${tier}`}>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-semibold">
                 {plan?.name ?? tier.toUpperCase()} {tp.monthly}
@@ -118,7 +163,7 @@ export function ConsoleTokenPlanPage() {
             </div>
           </div>
 
-          <div className="mimo-token-plan-card mimo-token-plan-card-usage">
+          <div className={`mimo-token-plan-card mimo-token-plan-card-usage mimo-token-plan-card-usage--${tier}`}>
             <p className="text-sm font-medium">{tp.usage}</p>
             <div className="mt-auto space-y-3 pt-8">
               <div className="h-2 overflow-hidden rounded-full bg-mimo-border">
@@ -259,7 +304,12 @@ export function ConsoleTokenPlanPage() {
               </button>
             ))}
           </div>
-          <button type="button" className="mimo-console-outline-btn mimo-btn-sm">
+          <button
+            type="button"
+            className="mimo-console-outline-btn mimo-btn-sm"
+            disabled={!tokenUsage || tokenLoading}
+            onClick={handleExport}
+          >
             {tp.export}
           </button>
         </div>
@@ -290,7 +340,9 @@ export function ConsoleTokenPlanPage() {
           <p className="text-sm">
             <span className="text-mimo-muted">{tp.tokenTotal}</span>
             <span className="mx-2 text-mimo-muted">|</span>
-            <span className="font-medium">0 {tp.tokensUnit}</span>
+            <span className="font-medium">
+              {tokenLoading ? "…" : llmTotalTokens.toLocaleString()} {tp.tokensUnit}
+            </span>
           </p>
           <div className="mimo-token-plan-segment">
             {(
@@ -311,14 +363,31 @@ export function ConsoleTokenPlanPage() {
           </div>
         </div>
 
+        {usageTab === "llm" && tokenUsage && (chartDaily.length > 0 || tokenUsage.by_model.length > 0) ? (
+          <div className="mt-4 min-h-[220px]">
+            <TokenUsageCharts
+              daily={chartDaily}
+              byModel={tokenUsage.by_model}
+              mode={tokenMode}
+              view={viewMode}
+              tokensUnit={tp.tokensUnit}
+              requestLabel={tp.requestTotal}
+              dayLabel={tp.granularityDay}
+              emptyLabel={t.common.noData}
+              promptTokens={tokenUsage.prompt_tokens}
+              completionTokens={tokenUsage.completion_tokens}
+            />
+          </div>
+        ) : (
         <div className="mimo-console-empty mt-2 min-h-[220px]">
           <svg width="120" height="96" viewBox="0 0 120 96" fill="none" aria-hidden className="opacity-80">
             <rect x="20" y="12" width="56" height="72" rx="4" fill="#e6f4ff" />
             <rect x="32" y="24" width="56" height="72" rx="4" fill="#bae0ff" />
             <rect x="44" y="36" width="56" height="72" rx="4" fill="#91caff" />
           </svg>
-          <p className="mt-4 text-sm text-mimo-muted">{t.common.noData}</p>
+          <p className="mt-4 text-sm text-mimo-muted">{tokenLoading ? "…" : t.common.noData}</p>
         </div>
+        )}
       </div>
 
       <div className="mimo-token-plan-panel mt-4">
@@ -327,18 +396,32 @@ export function ConsoleTokenPlanPage() {
           <span className="text-mimo-muted">{tp.requestTotal}</span>
           <span className="mx-2 text-mimo-muted">|</span>
           <span className="font-medium">
-            0 {tp.timesUnit}
+            {tokenLoading ? "…" : llmRequestCount.toLocaleString()} {tp.timesUnit}
           </span>
         </p>
+        {chartDaily.length > 0 ? (
+          <div className="mt-4 min-h-[200px]">
+            <TokenRequestChart
+              daily={chartDaily}
+              view={viewMode}
+              timesUnit={tp.timesUnit}
+              dayLabel={tp.granularityDay}
+              requestLabel={tp.requestTotal}
+              emptyLabel={t.common.noData}
+            />
+          </div>
+        ) : (
         <div className="mimo-console-empty mt-2 min-h-[160px]">
           <svg width="120" height="96" viewBox="0 0 120 96" fill="none" aria-hidden className="opacity-80">
             <rect x="20" y="12" width="56" height="72" rx="4" fill="#e6f4ff" />
             <rect x="32" y="24" width="56" height="72" rx="4" fill="#bae0ff" />
             <rect x="44" y="36" width="56" height="72" rx="4" fill="#91caff" />
           </svg>
-          <p className="mt-4 text-sm text-mimo-muted">{t.common.noData}</p>
+          <p className="mt-4 text-sm text-mimo-muted">{tokenLoading ? "…" : t.common.noData}</p>
         </div>
+        )}
       </div>
+      <TokenUsageExportDialog open={exportOpen} data={tokenUsage} onClose={() => setExportOpen(false)} />
     </ConsolePageFrame>
   );
 }

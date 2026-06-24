@@ -1,0 +1,20 @@
+# 灵枢 Chat Harness（独立于 Console / Code）
+# 小模型 Qwen3-8B（intent 角色）做记忆提取与编排，用户所选模型做最终生成
+
+enabled: true
+
+# —— 对话记忆（创新点：每轮用小模型提取历史要点 + 保留近轮原文）——
+memory:
+  enabled: true
+  extractor_role: intent
+  min_history_messages: 1
+  tail_raw_turns: 2
+
+# —— 复杂度路由 ——
+complexity_threshold_guided: 1
+complexity_threshold_decompose: 3
+
+analyzer_role: intent
+enable_critic: true
+enable_refine: true
+max_refine_passes: 1

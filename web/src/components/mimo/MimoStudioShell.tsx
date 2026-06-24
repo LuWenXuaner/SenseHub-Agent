@@ -1,10 +1,10 @@
 import { Link, Outlet } from "react-router-dom";
-import { Check, ChevronDown, Link2, PanelLeft, PanelLeftClose, Plus, Trash2, User } from "lucide-react";
+import { ChevronDown, Link2, PanelLeft, PanelLeftClose, Plus, Trash2, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
-import { STUDIO_MODELS } from "@/lib/siteContent";
 import { StudioProvider, useStudio } from "@/context/StudioContext";
+import { StudioModelPicker } from "@/components/mimo/StudioModelPicker";
 
 function StudioTopBar() {
   const [open, setOpen] = useState(false);
@@ -35,28 +35,14 @@ function StudioTopBar() {
           <ChevronDown size={14} className={`opacity-50 transition ${open ? "rotate-180" : ""}`} />
         </button>
         {open && (
-          <div className="mimo-studio-model-menu">
-            {STUDIO_MODELS.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                className={`mimo-studio-model-option ${m.id === modelId ? "mimo-studio-model-option-active" : ""}`}
-                onClick={() => {
-                  setModelId(m.id);
-                  setOpen(false);
-                }}
-              >
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{m.name}</span>
-                    {m.badge && <span className="mimo-studio-badge-new">{m.badge}</span>}
-                  </div>
-                  <p className="mt-0.5 text-xs text-mimo-muted">{m.description}</p>
-                </div>
-                {m.id === modelId && <Check size={16} />}
-              </button>
-            ))}
-          </div>
+          <StudioModelPicker
+            open={open}
+            modelId={modelId}
+            onSelect={(id) => {
+              setModelId(id);
+              setOpen(false);
+            }}
+          />
         )}
       </div>
 

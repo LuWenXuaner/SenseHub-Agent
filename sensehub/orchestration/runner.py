@@ -196,6 +196,9 @@ async def confirm_and_run(task_id: str) -> TaskResponse:
 
 
 def cancel_task(task_id: str) -> TaskResponse | None:
+    from sensehub.execution.kill_switch import activate
+
+    activate()
     task = task_repo.get_task(task_id)
     if not task or task.status in ("done", "failed", "cancelled"):
         return task

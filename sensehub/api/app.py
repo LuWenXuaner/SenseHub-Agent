@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from sensehub.api.middleware import SecurityHeadersMiddleware
 from sensehub.api.middleware_lan import LanAccessMiddleware
-from sensehub.api.routes import admin, audit, auth, health, hub, license, models, perception, rules, security, sessions, tasks, tts, tunnel, user_settings, virtual_screen, voice, wallet
+from sensehub.api.routes import admin, audit, auth, gamification, health, hub, license, models, perception, rules, security, sessions, tasks, tts, tunnel, user_settings, virtual_screen, voice, wallet
 from sensehub.api.ws import router as ws_router
 from sensehub.gateway.ws_agent import router as ws_agent_router
 from sensehub.db.database import init_db
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(user_settings.router, prefix="/api")
     app.include_router(license.router, prefix="/api")
     app.include_router(wallet.router, prefix="/api")
+    app.include_router(gamification.router, prefix="/api")
     app.include_router(admin.router, prefix="/api")
     app.include_router(models.router, prefix="/api")
     app.include_router(audit.router, prefix="/api")

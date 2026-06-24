@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sensehub.cognition.harness import PlanDeliveryMismatch, apply_sandbox_confirm_gates, validate_plan_delivery
+from sensehub.cognition.console_harness import PlanDeliveryMismatch, apply_sandbox_confirm_gates, validate_plan_delivery
 from sensehub.cognition.planner import Planner
 from sensehub.cognition.prompts import INTENT_SYSTEM
 from sensehub.cognition.router import LLMRouter

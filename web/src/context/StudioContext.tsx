@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { STUDIO_MODELS } from "@/lib/siteContent";
+import { STUDIO_MODELS, type StudioModelItem } from "@/lib/siteContent";
 import {
   createStudioSession,
   loadStudioSessions,
@@ -9,12 +9,14 @@ import {
   type StudioMessage,
   type StudioSession,
 } from "@/lib/studioSessions";
+import { userStorageScope } from "@/lib/userScope";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 type StudioCtx = {
   modelId: string;
   setModelId: (id: string) => void;
-  selectedModel: (typeof STUDIO_MODELS)[number];
+  selectedModel: StudioModelItem;
   sessions: StudioSession[];
   sessionId: string;
   messages: StudioMessage[];
@@ -30,20 +32,23 @@ type StudioCtx = {
 const StudioContext = createContext<StudioCtx | null>(null);
 
 export function StudioProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const scope = userStorageScope(user?.username);
   const [modelId, setModelId] = useState<string>(STUDIO_MODELS[0]?.id ?? "qwen3-8b");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const initial = loadStudioSessions();
-  const bootstrap = initial[0] ?? createStudioSession();
-  const [sessions, setSessions] = useState<StudioSession[]>(initial.length ? initial : [bootstrap]);
-  const [sessionId, setSessionId] = useState(bootstrap.id);
-  const [messages, setMessages] = useState<StudioMessage[]>(bootstrap.messages);
+  const [sessions, setSessions] = useState<StudioSession[]>([]);
+  const [sessionId, setSessionId] = useState("");
+  const [messages, setMessages] = useState<StudioMessage[]>([]);
 
   const selectedModel = STUDIO_MODELS.find((m) => m.id === modelId) ?? STUDIO_MODELS[0];
 
-  const persist = useCallback((nextSessions: StudioSession[]) => {
-    setSessions(nextSessions);
-    saveStudioSessions(nextSessions);
-  }, []);
+  const persist = useCallback(
+    (nextSessions: StudioSession[]) => {
+      setSessions(nextSessions);
+      saveStudioSessions(nextSessions, scope);
+    },
+    [scope]
+  );
 
   const persistMessages = useCallback(
     (msgs: StudioMessage[]) => {
@@ -57,21 +62,28 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           updatedAt: Date.now(),
         };
         const next = upsertStudioSession(prev, updated);
-        saveStudioSessions(next);
+        saveStudioSessions(next, scope);
         return next;
       });
     },
-    [sessionId]
+    [sessionId, scope]
   );
 
   useEffect(() => {
     let cancelled = false;
+    const initial = loadStudioSessions(scope);
+    const bootstrap = initial[0] ?? createStudioSession();
+    const list = initial.length ? initial : [bootstrap];
+    setSessions(list);
+    setSessionId(bootstrap.id);
+    setMessages(bootstrap.messages);
+
     void (async () => {
       try {
         const res = await api.listSessions("studio");
         if (cancelled || !res.sessions?.length) return;
         const mapped = res.sessions.map((s) => {
-          const local = loadStudioSessions().find((x) => x.serverId === s.session_id);
+          const local = list.find((x) => x.serverId === s.session_id);
           return (
             local ?? {
               ...createStudioSession(),
@@ -80,7 +92,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             }
           );
         });
-        persist(mapped);
+        setSessions(mapped);
+        saveStudioSessions(mapped, scope);
         setSessionId(mapped[0].id);
         setMessages(mapped[0].messages);
       } catch {
@@ -90,21 +103,24 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [persist]);
+  }, [scope]);
 
   const newChat = useCallback(() => {
     const s = createStudioSession();
     persist(upsertStudioSession(sessions, s));
     setSessionId(s.id);
     setMessages([]);
-    void api.createSession("", "studio").then((r) => {
-      setSessions((prev) => {
-        const next = prev.map((x) => (x.id === s.id ? { ...x, serverId: r.session_id } : x));
-        saveStudioSessions(next);
-        return next;
-      });
-    }).catch(() => {});
-  }, [persist, sessions]);
+    void api
+      .createSession("", "studio")
+      .then((r) => {
+        setSessions((prev) => {
+          const next = prev.map((x) => (x.id === s.id ? { ...x, serverId: r.session_id } : x));
+          saveStudioSessions(next, scope);
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, [persist, sessions, scope]);
 
   const switchSession = useCallback(
     (id: string) => {
@@ -114,16 +130,23 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setMessages(s.messages);
       const sid = s.serverId;
       if (!sid) return;
-      void api.getSession(sid).then((detail) => {
-        const msgs: StudioMessage[] = detail.messages.map((m) => ({
-          role: m.role === "user" ? "user" : "assistant",
-          content: m.content,
-        }));
-        setMessages(msgs);
-        persist(upsertStudioSession(sessions, { ...s, messages: msgs, updatedAt: Date.now() }));
-      }).catch(() => {});
+      void api
+        .getSession(sid)
+        .then((detail) => {
+          const msgs: StudioMessage[] = detail.messages.map((m) => ({
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.content,
+          }));
+          setMessages(msgs);
+          setSessions((prev) => {
+            const next = upsertStudioSession(prev, { ...s, messages: msgs, updatedAt: Date.now() });
+            saveStudioSessions(next, scope);
+            return next;
+          });
+        })
+        .catch(() => {});
     },
-    [persist, sessions]
+    [sessions, scope]
   );
 
   const deleteSession = useCallback(

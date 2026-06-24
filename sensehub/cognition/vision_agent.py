@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from sensehub.cognition.router import LLMRouter
+from sensehub.execution.kill_switch import is_killed
 from sensehub.execution.tools import desktop, gui
 from sensehub.execution.tools import screenshot as screenshot_tool
 from sensehub.settings import get_settings
@@ -86,6 +87,16 @@ async def run_gui_agent(intent: str, *, max_steps: int = MAX_STEPS) -> dict[str,
     last_shot: str | None = None
 
     for step_idx in range(max_steps):
+        if is_killed():
+            return {
+                "success": False,
+                "intent": intent,
+                "steps": history,
+                "screenshot_path": last_shot,
+                "error": "用户已停止执行",
+                "method": "vlm-gui-agent",
+            }
+
         shot = screenshot_tool.run({"mode": "fullscreen"})
         last_shot = shot["screenshot_path"]
         image_b64 = gui.encode_image_file(last_shot)

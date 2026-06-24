@@ -1,4 +1,6 @@
+import { Link } from "react-router-dom";
 import { useState } from "react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { ConsolePageFrame } from "@/components/mimo/ConsolePageFrame";
 import { InviteFriendsModal } from "@/components/mimo/InviteFriendsModal";
 import {
@@ -25,8 +27,10 @@ export function ConsolePointsPage() {
   const onCheckIn = async () => {
     try {
       const res = await checkIn();
-      if (res.ok) setMsg(fmt(t.console.checkInReward, { n: res.earned }));
-      else setMsg(t.console.checkInDone);
+      if (res.ok) {
+        const extra = "weekend_double" in res && res.weekend_double ? ` · ${t.gamification.weekendDouble}` : "";
+        setMsg(fmt(t.console.checkInReward, { n: res.earned }) + extra);
+      } else setMsg(t.console.checkInDone);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : t.common.noData);
     }
@@ -78,6 +82,15 @@ export function ConsolePointsPage() {
         }
       >
         {msg && <p className="mb-4 text-sm text-mimo-accent">{msg}</p>}
+
+        <Link to="/console/engagement" className="mimo-engage-teaser mb-6 block">
+          <Sparkles size={18} className="shrink-0 text-[#c9a96e]" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{t.gamification.hubLink}</p>
+            <p className="text-xs text-mimo-muted">{t.gamification.hubTeaser}</p>
+          </div>
+          <ArrowRight size={16} className="shrink-0 opacity-50" aria-hidden />
+        </Link>
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="mimo-balance-summary-card">

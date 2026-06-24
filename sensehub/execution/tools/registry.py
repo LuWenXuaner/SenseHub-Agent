@@ -14,7 +14,7 @@ from sensehub.execution.browser.playwright_browser import (
     browser_status,
     browser_tabs,
 )
-from sensehub.execution.tools import agent_ops, browser, clipboard, desktop, file_ops, gui, research, screenshot, system, virtual
+from sensehub.execution.tools import agent_ops, browser, clipboard, desktop, document_gen, file_ops, gui, research, screenshot, system, virtual
 from sensehub.models.schemas import PlanStep, StepResult
 
 ToolFn = Callable[[dict[str, Any]], dict[str, Any]]
@@ -37,6 +37,9 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     "list_windows": (desktop.list_windows, "L0"),
     "active_window": (desktop.active_window, "L0"),
     "type_text": (desktop.type_text, "L1"),
+    "save_notepad": (desktop.save_notepad, "L1"),
+    "notepad_type_save": (desktop.notepad_type_save, "L1"),
+    "wechat_send_message": (desktop.wechat_send_message, "L1"),
     "press_key": (desktop.press_key, "L1"),
     # 键鼠
     "click": (gui.click, "L1"),
@@ -54,11 +57,13 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     "browser_tabs": (browser_tabs, "L0"),
     # 信息检索（returns_data，供应答脑引用）
     "fetch_url": (research.fetch_url, "L0"),
+    "web_search_results": (research.web_search_results, "L0"),
     "get_weather": (research.get_weather, "L0"),
     # 文件
     "list_dir": (file_ops.list_dir, "L0"),
     "read_file": (file_ops.read_file, "L0"),
     "write_file": (file_ops.write_file, "L2"),
+    "generate_document": (document_gen.generate_document, "L2"),
     "copy_file": (file_ops.copy_file, "L2"),
     "file_exists": (file_ops.file_exists, "L0"),
     "open_folder": (file_ops.open_folder, "L1"),

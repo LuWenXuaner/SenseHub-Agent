@@ -2,6 +2,11 @@ import { FormEvent, useMemo, useRef, useState } from "react";
 import { Loader2, Paperclip, SendHorizonal, X } from "lucide-react";
 import { api, type ChatTurn } from "@/lib/api";
 import { formatUserFacingError } from "@/lib/thinkingTrace";
+import {
+  AgentStudioAvatar,
+  StudioAvatarPlaceholder,
+  UserStudioAvatar,
+} from "@/components/chat/StudioChatAvatar";
 import { ChatMessageContent } from "@/components/chat/ChatMessageContent";
 import { useStudio } from "@/context/StudioContext";
 import { useLocale } from "@/context/LocaleContext";
@@ -30,7 +35,7 @@ async function readFileAsText(file: File): Promise<string> {
 }
 
 export function StudioPage() {
-  const { selectedModel, messages, persistMessages, sessions, sessionId } = useStudio();
+  const { selectedModel, modelId, messages, persistMessages, sessions, sessionId } = useStudio();
   const { locale, t } = useLocale();
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,6 +49,14 @@ export function StudioPage() {
     [input, loading, attachments.length]
   );
   const showWelcome = messages.length === 0 && !loading;
+
+  const showAvatarFor = (role: "user" | "assistant", idx: number) => {
+    if (idx === 0) return true;
+    return messages[idx - 1]?.role !== role;
+  };
+
+  const loadingShowsAvatar =
+    messages.length === 0 || messages[messages.length - 1]?.role !== "assistant";
 
   const scrollEnd = () => {
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -90,7 +103,13 @@ export function StudioPage() {
         content: m.content,
       }));
       const session = sessions.find((s) => s.id === sessionId);
-      const res = await api.studioChat(text, undefined, history, session?.serverId ?? "");
+      const res = await api.studioChat(
+        text,
+        undefined,
+        history,
+        session?.serverId ?? "",
+        modelId
+      );
       const reply = (res.reply || t.common.noData).trim();
       persistMessages([...nextMsgs, { role: "assistant", content: reply }]);
       if (res.session_id && session && !session.serverId) {
@@ -138,23 +157,53 @@ export function StudioPage() {
           </div>
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-8">
-          <div className="mx-auto max-w-3xl space-y-3">
-            {messages.map((m, idx) => (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
+          <div className="mimo-studio-chat-area">
+            {messages.map((m, idx) => {
+              const showAvatar = showAvatarFor(m.role, idx);
+              const continued = !showAvatar;
+              return (
+                <article
+                  key={`${m.role}-${idx}`}
+                  className={`mimo-studio-chat-row ${
+                    m.role === "user" ? "mimo-studio-chat-row-user" : ""
+                  } ${continued ? "mimo-studio-chat-row-continued" : ""}`}
+                >
+                  {showAvatar ? (
+                    m.role === "user" ? (
+                      <UserStudioAvatar />
+                    ) : (
+                      <AgentStudioAvatar />
+                    )
+                  ) : (
+                    <StudioAvatarPlaceholder />
+                  )}
+                  <div
+                    className={`mimo-studio-chat-bubble ${
+                      m.role === "user"
+                        ? "mimo-studio-chat-bubble-user"
+                        : "mimo-studio-chat-bubble-assistant"
+                    }`}
+                  >
+                    <ChatMessageContent text={m.content} variant={m.role === "assistant" ? "studio" : "default"} />
+                  </div>
+                </article>
+              );
+            })}
+            {loading && (
               <article
-                key={`${m.role}-${idx}`}
-                className={`rounded-xl px-3 py-2.5 text-sm leading-6 ${
-                  m.role === "user" ? "bg-mimo-warm text-mimo-text" : "text-mimo-text"
+                className={`mimo-studio-chat-row ${
+                  loadingShowsAvatar ? "" : "mimo-studio-chat-row-continued"
                 }`}
               >
-                <ChatMessageContent text={m.content} />
+                {loadingShowsAvatar ? <AgentStudioAvatar /> : <StudioAvatarPlaceholder />}
+                <div className="mimo-studio-chat-bubble mimo-studio-chat-bubble-assistant">
+                  <div className="inline-flex items-center gap-2 text-sm text-mimo-muted">
+                    <Loader2 size={14} className="animate-spin" />
+                    {t.studio.thinking}
+                  </div>
+                </div>
               </article>
-            ))}
-            {loading && (
-              <div className="inline-flex items-center gap-2 text-sm text-mimo-muted">
-                <Loader2 size={14} className="animate-spin" />
-                {t.studio.thinking}
-              </div>
             )}
             <div ref={endRef} />
           </div>

@@ -8,6 +8,7 @@ import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from html import unescape
 from typing import Any
 
@@ -18,6 +19,11 @@ _TAG_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.I | re.S)
 _BR_RE = re.compile(r"<br\s*/?>", re.I)
 _BLOCK_END_RE = re.compile(r"</(p|div|li|tr|h[1-6])>", re.I)
 _STRIP_TAG_RE = re.compile(r"<[^>]+>")
+_DDG_RESULT_A_RE = re.compile(
+    r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+    re.I | re.S,
+)
+_DDG_SNIPPET_RE = re.compile(r'class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</', re.I | re.S)
 
 
 def _http_get(url: str, *, accept: str = "*/*") -> bytes:
@@ -45,6 +51,147 @@ def _html_to_text(raw: str) -> str:
     lines = [ln.strip() for ln in text.splitlines()]
     compact = "\n".join(ln for ln in lines if ln)
     return compact[:_MAX_TEXT_CHARS]
+
+
+def _clean_fragment(raw: str) -> str:
+    text = _STRIP_TAG_RE.sub(" ", raw or "")
+    text = unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _unwrap_ddg_href(href: str) -> str:
+    if not href:
+        return ""
+    if href.startswith("/"):
+        href = "https://duckduckgo.com" + href
+    try:
+        parsed = urllib.parse.urlparse(href)
+        qs = urllib.parse.parse_qs(parsed.query)
+        if "uddg" in qs and qs["uddg"]:
+            return urllib.parse.unquote(qs["uddg"][0])
+    except Exception:
+        return href
+    return href
+
+
+def _ddg_html_search(query: str, max_results: int) -> list[dict[str, str]]:
+    q = urllib.parse.quote(query)
+    url = f"https://html.duckduckgo.com/html/?q={q}"
+    body = _http_get(url, accept="text/html,*/*")
+    html = body.decode("utf-8", errors="replace")
+    results: list[dict[str, str]] = []
+    for m in _DDG_RESULT_A_RE.finditer(html):
+        href = _unwrap_ddg_href(m.group(1))
+        title = _clean_fragment(m.group(2))
+        if not href or not title:
+            continue
+        tail = html[m.end() : m.end() + 900]
+        snip_m = _DDG_SNIPPET_RE.search(tail)
+        snippet = _clean_fragment(snip_m.group(1)) if snip_m else ""
+        if href.startswith("http"):
+            results.append({"title": title, "url": href, "snippet": snippet})
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def _ddg_instant_search(query: str, max_results: int) -> tuple[list[dict[str, str]], str]:
+    q = urllib.parse.quote(query)
+    url = (
+        "https://api.duckduckgo.com/"
+        f"?q={q}&format=json&no_redirect=1&no_html=1&skip_disambig=0"
+    )
+    body = _http_get(url, accept="application/json,*/*")
+    payload = json.loads(body.decode("utf-8", errors="replace"))
+    answer = str(payload.get("AbstractText") or "").strip()
+    rows: list[dict[str, str]] = []
+
+    def _push_from_topic(item: dict[str, Any]) -> None:
+        txt = str(item.get("Text") or "").strip()
+        first_url = str(item.get("FirstURL") or "").strip()
+        if not txt or not first_url:
+            return
+        title = txt.split(" - ", 1)[0].strip() or txt[:80]
+        rows.append({"title": title, "url": first_url, "snippet": txt})
+
+    for topic in payload.get("RelatedTopics") or []:
+        if isinstance(topic, dict) and isinstance(topic.get("Topics"), list):
+            for child in topic["Topics"]:
+                if len(rows) >= max_results:
+                    break
+                if isinstance(child, dict):
+                    _push_from_topic(child)
+        elif isinstance(topic, dict):
+            _push_from_topic(topic)
+        if len(rows) >= max_results:
+            break
+    return rows[:max_results], answer
+
+
+def _bing_rss_search(query: str, max_results: int) -> list[dict[str, str]]:
+    q = urllib.parse.quote(query)
+    url = f"https://www.bing.com/search?q={q}&format=rss&setlang=zh-Hans"
+    body = _http_get(url, accept="application/rss+xml,application/xml,text/xml,*/*")
+    root = ET.fromstring(body.decode("utf-8", errors="replace"))
+    rows: list[dict[str, str]] = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        desc = (item.findtext("description") or "").strip()
+        if title and link:
+            rows.append({"title": title, "url": link, "snippet": _clean_fragment(desc)})
+        if len(rows) >= max_results:
+            break
+    return rows
+
+
+def web_search_results(params: dict[str, Any]) -> dict[str, Any]:
+    """全网搜索：返回结构化搜索结果（标题/链接/摘要），不打开浏览器窗口."""
+    query = str(params.get("query") or "").strip()
+    if not query:
+        raise ValueError("query 不能为空")
+    max_results = max(1, min(int(params.get("max_results", 8)), 12))
+    source = str(params.get("source") or "auto").strip().lower()
+    if source not in {"duckduckgo", "auto"}:
+        raise ValueError("source 仅支持 duckduckgo 或 auto")
+
+    errors: list[str] = []
+    rows: list[dict[str, str]] = []
+    answer = ""
+    used = "duckduckgo_html"
+
+    if source in {"duckduckgo", "auto"}:
+        try:
+            rows = _ddg_html_search(query, max_results)
+        except Exception as exc:
+            errors.append(f"html:{exc}")
+
+        if not rows:
+            used = "duckduckgo_instant"
+            try:
+                rows, answer = _ddg_instant_search(query, max_results)
+            except Exception as exc:
+                errors.append(f"instant:{exc}")
+
+    if not rows and source == "auto":
+        used = "bing_rss"
+        try:
+            rows = _bing_rss_search(query, max_results)
+        except Exception as exc:
+            errors.append(f"bing:{exc}")
+
+    if not rows and not answer:
+        detail = "; ".join(errors) if errors else "未知错误"
+        raise RuntimeError(f"搜索失败：{detail}")
+
+    return {
+        "query": query,
+        "source": used,
+        "count": len(rows),
+        "results": rows,
+        "answer": answer,
+    }
 
 
 def fetch_url(params: dict[str, Any]) -> dict[str, Any]:
@@ -189,7 +336,7 @@ def get_weather(params: dict[str, Any]) -> dict[str, Any]:
     location = str(params.get("location") or params.get("city") or "").strip()
     if not location:
         raise ValueError("location 不能为空")
-    days = max(1, min(int(params.get("days", 2)), 3))
+    days = max(1, min(int(params.get("days", 2)), 7))
 
     geo = _geocode_open_meteo(location)
     if geo:

@@ -57,8 +57,27 @@ def hotkey(params: dict[str, Any]) -> dict[str, Any]:
         keys = [k.strip() for k in keys.replace("+", " ").split() if k.strip()]
     if not keys:
         raise ValueError("keys 不能为空")
+
+    app = str(params.get("app") or "").strip()
+    if app and bool(params.get("focus", False)):
+        from sensehub.execution.tools.desktop import ensure_app_focus_for_input
+
+        ok, fg_title, _ = ensure_app_focus_for_input(
+            app,
+            click_edit=False,
+            aggressive=True,
+            timeout=5.0,
+            post_wait=0.1,
+        )
+        if not ok:
+            raise RuntimeError(f"快捷键发送前无法聚焦应用: {app}")
+        pre_wait = float(params.get("pre_wait", 0.12))
+        time.sleep(max(0.0, min(pre_wait, 2.0)))
+    else:
+        fg_title = ""
+
     pyautogui.hotkey(*keys)
-    return {"keys": keys}
+    return {"keys": keys, "app": app or None, "foreground_window": fg_title or None}
 
 
 def wait(params: dict[str, Any]) -> dict[str, Any]:

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { api, AuditEntry } from "@/lib/api";
 import { ConsolePageFrame } from "@/components/mimo/ConsolePageFrame";
+import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
 import { Globe, FolderLock, ScrollText, Shield, ShieldCheck } from "lucide-react";
 
@@ -146,7 +148,13 @@ function SecurityPanels() {
 }
 
 export function ConsoleSecurityPage() {
+  const { user } = useAuth();
   const { t } = useLocale();
+
+  if (user && user.username !== "admin") {
+    return <Navigate to="/console/account" replace />;
+  }
+
   return (
     <ConsolePageFrame title={t.console.security} subtitle={t.securityPage.subtitle}>
       <SecurityPanels />

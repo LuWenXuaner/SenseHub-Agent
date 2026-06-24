@@ -16,7 +16,8 @@ import {
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { applyStoredConsoleTheme } from "@/hooks/useGamification";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
 import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
@@ -71,13 +72,13 @@ function ConsoleSidebar({ onInvite }: { onInvite: () => void }) {
       items: [
         { to: "/console/account", label: t.console.personalCenter, icon: User, end: true },
         { to: "/console/api-keys", label: t.console.apiKeys, icon: Key },
-        { to: "/console/security", label: t.console.security, icon: Shield },
       ],
     },
     {
       title: t.console.finance,
       items: [
         { to: "/console/points", label: t.console.pointsCenter, icon: Wallet },
+        { to: "/console/engagement", label: t.console.engagement, icon: Gift },
         { to: "/console/token-plan", label: t.console.tokenPlan, icon: CreditCard },
         { to: "/console/bills", label: t.console.bills, icon: BarChart3 },
         { to: "/console/points-history", label: t.console.pointsHistory, icon: Receipt },
@@ -96,7 +97,10 @@ function ConsoleSidebar({ onInvite }: { onInvite: () => void }) {
       ? [
           {
             title: t.adminPage.section,
-            items: [{ to: "/console/admin/users", label: t.adminPage.title, icon: ShieldCheck }],
+            items: [
+              { to: "/console/security", label: t.console.security, icon: Shield },
+              { to: "/console/admin/users", label: t.adminPage.title, icon: ShieldCheck },
+            ],
           },
         ]
       : []),
@@ -162,6 +166,10 @@ function ConsoleSidebar({ onInvite }: { onInvite: () => void }) {
 export function MimoConsoleShell() {
   const { t } = useLocale();
   const [inviteOpen, setInviteOpen] = useState(false);
+
+  useEffect(() => {
+    applyStoredConsoleTheme();
+  }, []);
 
   return (
     <div className="mimo-product-app flex h-screen flex-col bg-[#f7f7f7]">

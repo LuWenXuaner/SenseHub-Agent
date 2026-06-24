@@ -111,7 +111,11 @@ export const api = {
     fetch("/api/wallet/plans")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
       .then((d: { items: SubscriptionPlanRow[] }) => d),
-  walletCheckin: () => request<{ ok: boolean; earned: number; balance: number }>("/api/wallet/checkin", { method: "POST" }),
+  walletCheckin: () =>
+    request<{ ok: boolean; earned: number; balance: number; streak?: number; weekend_double?: boolean }>(
+      "/api/wallet/checkin",
+      { method: "POST" }
+    ),
   walletLedger: (filter: "all" | "earn" | "spend" = "all") =>
     request<{ items: PointsLedgerRow[] }>(`/api/wallet/ledger?filter=${filter}`),
   walletExchanges: () => request<{ items: ExchangeRow[] }>("/api/wallet/exchanges"),
@@ -144,6 +148,18 @@ export const api = {
       body: JSON.stringify({ plan }),
     }),
   walletBills: () => request<{ summary: BillsSummary; items: BillRow[] }>("/api/wallet/bills"),
+  walletTokenUsage: (days = 30) =>
+    request<TokenUsageSummary>(`/api/wallet/token-usage?days=${days}`),
+  gamificationSummary: () => request<GamificationSummary>("/api/gamification"),
+  gamificationLeaderboard: (limit = 20) =>
+    request<{ items: LeaderboardRow[] }>(`/api/gamification/leaderboard?limit=${limit}`),
+  gamificationWheelSpin: () =>
+    request<WheelSpinResult>("/api/gamification/wheel/spin", { method: "POST" }),
+  gamificationUpdateProfile: (body: { profile_bg?: string; profile_theme?: string }) =>
+    request<GamificationSummary>("/api/gamification/profile", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
   invitesOverview: () => request<{ stats: InviteStats; items: InviteRow[] }>("/api/invites"),
   pluginsList: () => request<{ items: PluginRow[] }>("/api/plugins"),
   adminSearchUsers: (q = "") =>
@@ -165,16 +181,47 @@ export const api = {
       body: JSON.stringify(body),
     }),
   resetApiConfig: () => request<ApiConfigPublic>("/api/settings/api", { method: "DELETE" }),
+  getConsoleSettings: () =>
+    request<{ default_save_path: string; workspace: string }>("/api/settings/console"),
+  saveConsoleSettings: (body: { default_save_path?: string }) =>
+    request<{ default_save_path: string; workspace: string }>("/api/settings/console", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  pickConsoleSaveFolder: () =>
+    request<{ cancelled: boolean; default_save_path?: string; workspace?: string; error?: string }>(
+      "/api/settings/console/pick-folder",
+      { method: "POST" }
+    ),
   hubCommand: (text: string, signal?: AbortSignal, history?: ChatTurn[], sessionId?: string) =>
     request<HubCommandResult>("/api/hub/command", {
       method: "POST",
       body: JSON.stringify({ text, history: history ?? [], session_id: sessionId ?? "", channel: "hub" }),
       signal,
     }),
-  studioChat: (text: string, signal?: AbortSignal, history?: ChatTurn[], sessionId?: string) =>
-    request<{ reply: string; session_id?: string; action: string }>("/api/studio/chat", {
+  studioChat: (
+    text: string,
+    signal?: AbortSignal,
+    history?: ChatTurn[],
+    sessionId?: string,
+    modelId?: string
+  ) =>
+    request<{
+      reply: string;
+      session_id?: string;
+      action: string;
+      model_id?: string | null;
+      model_used?: string | null;
+      harness_trace?: import("@/lib/harnessTrace").HarnessTrace;
+    }>("/api/studio/chat", {
       method: "POST",
-      body: JSON.stringify({ text, history: history ?? [], session_id: sessionId ?? "", channel: "studio" }),
+      body: JSON.stringify({
+        text,
+        history: history ?? [],
+        session_id: sessionId ?? "",
+        model_id: modelId ?? "",
+        channel: "studio",
+      }),
       signal,
     }),
   codeAssist: (
@@ -548,6 +595,68 @@ export interface WalletSummary {
   tier_rank?: number;
 }
 
+export interface LevelProgress {
+  level: number;
+  xp: number;
+  current_floor: number;
+  next_cap: number;
+  progress_pct: number;
+  rating_id: string;
+  rating_name: string;
+  max_level: number;
+}
+
+export interface AchievementRow {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  unlocked: boolean;
+  unlocked_at?: string | null;
+}
+
+export interface CosmeticRow {
+  id: string;
+  name: string;
+  unlocked: boolean;
+  accent?: string;
+}
+
+export interface WheelStatus {
+  free_spins_left: number;
+  spin_cost: number;
+  balance: number;
+  prizes: { id: string; label: string; points: number }[];
+}
+
+export interface LeaderboardRow {
+  rank: number;
+  public_id: string;
+  display_name: string;
+  total_earned: number;
+  level: number;
+  rating_name: string;
+}
+
+export interface GamificationSummary {
+  progress: LevelProgress;
+  milestones: { level: number; points: number; label: string }[];
+  achievements: AchievementRow[];
+  backgrounds: CosmeticRow[];
+  themes: CosmeticRow[];
+  profile: { profile_bg: string; profile_theme: string };
+  season: { id: string; name: string; active: boolean; start?: string; end?: string };
+  weekend_double: boolean;
+  wheel: WheelStatus;
+  leaderboard_preview: LeaderboardRow[];
+}
+
+export interface WheelSpinResult {
+  prize: { id: string; label: string; points: number };
+  cost: number;
+  balance: number;
+}
+
 export interface PointsLedgerRow {
   id: number;
   delta: number;
@@ -582,6 +691,30 @@ export interface BillsSummary {
   token_usage: number;
   asr_seconds: number;
   plugin_calls: number;
+}
+
+export interface TokenUsageModelRow {
+  role: string;
+  provider: string;
+  model: string;
+  total_tokens: number;
+  request_count: number;
+}
+
+export interface TokenUsageDailyRow {
+  day: string;
+  total_tokens: number;
+  request_count: number;
+}
+
+export interface TokenUsageSummary {
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  request_count: number;
+  by_model: TokenUsageModelRow[];
+  daily: TokenUsageDailyRow[];
+  range_days?: number;
 }
 
 export interface InviteStats {
@@ -641,16 +774,32 @@ export interface ProviderConfigPublic {
 
 export interface RoleConfigPublic {
   role: string;
+  label_zh?: string;
+  label_en?: string;
   provider: string;
   provider_label: string;
   model: string;
+  default_provider?: string;
+  default_model?: string;
   description?: string;
+  description_zh?: string;
+  description_en?: string;
   configured: boolean;
+  user_override?: boolean;
+}
+
+export interface BrainPreset {
+  id: string;
+  label: string;
+  provider: string;
+  model: string;
 }
 
 export interface ApiConfigPublic {
   providers?: ProviderConfigPublic[];
   roles?: RoleConfigPublic[];
+  role_routes?: Record<string, { provider: string; model: string }>;
+  brain_presets?: BrainPreset[];
   siliconflow_api_key: string;
   volcengine_api_key: string;
   siliconflow_base_url: string;
@@ -670,6 +819,7 @@ export interface ApiConfigUpdate {
   vision_model?: string;
   chat_model?: string;
   providers?: Record<string, { base_url?: string; api_key?: string }>;
+  role_routes?: Record<string, { provider: string; model: string }>;
 }
 
 export interface HubCommandResult {

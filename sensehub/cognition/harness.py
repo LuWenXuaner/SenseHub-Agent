@@ -1,4 +1,8 @@
-"""编排 Harness：用结构化契约约束多脑协作，不靠关键词正则补丁."""
+"""编排 Harness（Console / Hub Agent 实现层）.
+
+对外请使用 sensehub.cognition.console_harness；
+Chat 用 chat_harness，Code 用 code_harness。三者职责分离，勿混用。
+"""
 
 from __future__ import annotations
 

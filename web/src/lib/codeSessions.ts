@@ -9,8 +9,12 @@ export type CodeSession = {
   projectName?: string;
 };
 
-const STORAGE_KEY = "sensehub_code_sessions";
+const STORAGE_PREFIX = "sensehub_code_sessions";
 const MAX_SESSIONS = 40;
+
+function storageKey(scope: string): string {
+  return `${STORAGE_PREFIX}::${scope}`;
+}
 
 export function codeTitleFromMessages(messages: CodeMessage[]): string {
   const first = messages.find((m) => m.role === "user" && m.content.trim())?.content.trim();
@@ -18,9 +22,9 @@ export function codeTitleFromMessages(messages: CodeMessage[]): string {
   return first.length > 28 ? `${first.slice(0, 28)}…` : first;
 }
 
-export function loadCodeSessions(): CodeSession[] {
+export function loadCodeSessions(scope = "guest"): CodeSession[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(scope));
     if (!raw) return [];
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return [];
@@ -40,11 +44,11 @@ export function loadCodeSessions(): CodeSession[] {
   }
 }
 
-export function saveCodeSessions(sessions: CodeSession[]): void {
+export function saveCodeSessions(sessions: CodeSession[], scope = "guest"): void {
   const trimmed = sessions
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_SESSIONS);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  localStorage.setItem(storageKey(scope), JSON.stringify(trimmed));
 }
 
 export function upsertCodeSession(sessions: CodeSession[], session: CodeSession): CodeSession[] {

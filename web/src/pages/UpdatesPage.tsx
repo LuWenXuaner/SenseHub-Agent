@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { NewsPager } from "@/components/marketing/NewsPager";
 import { useLocale } from "@/context/LocaleContext";
 
 export function UpdatesPage() {
@@ -9,6 +10,11 @@ export function UpdatesPage() {
     "console-launch": "/claw",
     "studio-multimodal": "/studio",
     "token-plan": "/token-plan",
+    "model-lineup-2026": "/models",
+    "chat-ui-upgrade": "/studio",
+    "points-invite": "/console/points",
+    "code-agent-beta": "/code",
+    "session-privacy": "/product/api",
   };
 
   return (
@@ -23,20 +29,24 @@ export function UpdatesPage() {
 
       <section className="mimo-section pt-0">
         <div className="mimo-container">
-          <div className="mimo-news-grid">
-            {t.news.map((item) => (
-              <article key={item.slug} className="mimo-news-card mimo-card-static">
-                <h2 className="text-base font-semibold leading-snug">{item.title}</h2>
-                <p className="mt-3 flex-1 text-sm leading-7 text-mimo-muted">{item.summary}</p>
-                <Link
-                  to={newsCtaTo[item.slug] ?? `/updates/${item.slug}`}
-                  className="mimo-btn-text mt-auto inline-flex text-sm"
-                >
-                  {t.updates.viewDetail} →
-                </Link>
-              </article>
-            ))}
-          </div>
+          <NewsPager total={t.news.length} className="mt-2">
+            {({ start, end }) => (
+              <div className="mimo-news-grid">
+                {t.news.slice(start, end).map((item) => (
+                  <article key={item.slug} className="mimo-news-card mimo-card-static">
+                    <h2 className="text-base font-semibold leading-snug">{item.title}</h2>
+                    <p className="mt-3 flex-1 text-sm leading-7 text-mimo-muted">{item.summary}</p>
+                    <Link
+                      to={newsCtaTo[item.slug] ?? `/updates/${item.slug}`}
+                      className="mimo-btn-text mt-auto inline-flex text-sm"
+                    >
+                      {t.updates.viewDetail} →
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            )}
+          </NewsPager>
         </div>
       </section>
 

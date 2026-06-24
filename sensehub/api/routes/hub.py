@@ -84,15 +84,23 @@ def _create_wait_confirm_response(
 
 
 @router.post("/studio/chat")
-async def studio_chat(body: TaskCreate, _: str = Depends(get_current_user)):
+async def studio_chat(body: TaskCreate, username: str = Depends(get_current_user)):
     text = body.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="内容不能为空")
+    from sensehub.db import users as user_store
+
+    user = user_store.get_user(username.strip().lower())
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    user_id = str(user["user_id"])
     try:
         result = await process_studio_chat(
             text,
             history=[h.model_dump() for h in body.history],
             session_id=body.session_id,
+            user_id=user_id,
+            model_id=body.model_id,
         )
     except BrainPipelineError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -101,6 +109,9 @@ async def studio_chat(body: TaskCreate, _: str = Depends(get_current_user)):
         "action": "answer",
         "reply": result.get("reply", ""),
         "session_id": result.get("session_id") or body.session_id,
+        "model_id": result.get("model_id"),
+        "model_used": result.get("model_used"),
+        "harness_trace": result.get("harness_trace"),
     }
 
 
@@ -137,11 +148,18 @@ async def code_assist(body: CodeAssistCreate, username: str = Depends(get_curren
 async def hub_command(
     body: TaskCreate,
     background_tasks: BackgroundTasks,
-    _: str = Depends(get_current_user),
+    username: str = Depends(get_current_user),
 ):
     text = body.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="指令不能为空")
+
+    from sensehub.db import users as user_store
+
+    user = user_store.get_user(username.strip().lower())
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    user_id = str(user["user_id"])
 
     try:
         result = await process_user_input(
@@ -149,6 +167,7 @@ async def hub_command(
             source="text",
             history=[h.model_dump() for h in body.history],
             session_id=body.session_id,
+            user_id=user_id,
         )
     except BrainPipelineError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

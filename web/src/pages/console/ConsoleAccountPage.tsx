@@ -1,15 +1,19 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { ConsolePageFrame } from "@/components/mimo/ConsolePageFrame";
 import { useLocale } from "@/context/LocaleContext";
 import { useWallet } from "@/hooks/useWallet";
+import { useGamification } from "@/hooks/useGamification";
+import { BG_STYLES, RATING_COLORS } from "@/lib/gamificationCatalog";
+import { Medal } from "lucide-react";
 
 export function ConsoleAccountPage() {
   const { user, license, logout } = useAuth();
   const { t } = useLocale();
   const { summary } = useWallet();
+  const { data: game } = useGamification();
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -41,10 +45,26 @@ export function ConsoleAccountPage() {
 
   const publicId = user?.public_id || summary?.public_id || "—";
   const email = user?.email || "—";
+  const profileBg = game?.profile.profile_bg ?? localStorage.getItem("sensehub-profile-bg") ?? "default";
+  const cardBg = BG_STYLES[profileBg] ?? BG_STYLES.default;
+  const ratingColor = game ? RATING_COLORS[game.progress.rating_id] ?? "#c9a96e" : "#c9a96e";
 
   return (
     <ConsolePageFrame title={t.console.personalCenter} subtitle={t.console.accountSubtitle} centered>
-      <div className="mimo-account-card">
+      <div className="mimo-account-card" style={{ background: cardBg }}>
+        {game && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-mimo-border/60 bg-white/70 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Medal size={18} style={{ color: ratingColor }} aria-hidden />
+              <span className="text-sm font-medium">
+                {game.progress.rating_name} Lv.{game.progress.level}
+              </span>
+            </div>
+            <Link to="/console/engagement" className="text-xs text-[#1677ff] hover:underline">
+              {t.gamification.hubLink}
+            </Link>
+          </div>
+        )}
         <dl className="mimo-account-rows">
           <div className="mimo-account-row">
             <dt>{t.console.sensehubId}</dt>

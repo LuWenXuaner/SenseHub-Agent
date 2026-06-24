@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from sensehub.models.schemas import PlanStep, StepResult
+
 _MAX_TURNS = 10
 _MAX_CHARS = 6000
 
@@ -87,14 +89,51 @@ def artifacts_from_task(task: dict[str, Any] | None) -> list[str]:
 
 
 def fallback_reply_from_task(plan: Any, task: Any) -> str:
-    """应答脑不可用时的确定性汇总（仅依据 step output，不做工具名特判）."""
+    """应答脑不可用时的确定性汇总（通用，不做场景特判）."""
     task_dict = task.model_dump() if hasattr(task, "model_dump") else dict(task or {})
-    paths = artifacts_from_task(task_dict)
-    if paths:
-        return f"已完成。相关路径：{'；'.join(paths)}"
-    summary = str(task_dict.get("summary") or "").strip()
-    if summary and not _is_internal_summary(summary):
-        return summary
+    steps = list(getattr(plan, "steps", None) or task_dict.get("plan_steps") or [])
+    results_raw = task_dict.get("step_results") or []
+    results: list[StepResult] = []
+    for row in results_raw:
+        if hasattr(row, "step_id"):
+            results.append(row)
+        elif isinstance(row, dict):
+            results.append(StepResult(**row))
+    plan_steps = [s if isinstance(s, PlanStep) else PlanStep(**s) for s in steps]
+    summary = str(task_dict.get("summary") or getattr(plan, "summary", "") or "").strip()
+    return fallback_reply_from_steps(plan_steps, results, plan_summary=summary)
+
+
+def fallback_reply_from_steps(
+    steps: list[Any],
+    step_results: list[Any],
+    *,
+    plan_summary: str = "",
+) -> str:
+    """根据步骤成败给出简短通用答复，不暴露路径等技术细节."""
+    if not step_results:
+        if plan_summary and not _is_internal_summary(plan_summary):
+            return plan_summary
+        return "任务已完成。"
+
+    norm_steps = [s if isinstance(s, PlanStep) else PlanStep(**s) for s in steps]
+    norm_results = [r if isinstance(r, StepResult) else StepResult(**r) for r in step_results]
+    ok = [r for r in norm_results if r.success]
+    bad = [r for r in norm_results if not r.success]
+
+    if bad and not ok:
+        err = str(bad[0].error or "执行失败")
+        return f"未能完成：{err}。请查看执行过程或调整指令后重试。"
+
+    if bad:
+        return "部分步骤未能完成，请查看执行过程了解详情。"
+
+    # 有 returns_data 类工具且用户像在要答案时，尽量用计划摘要
+    data_tools = {"get_weather", "web_search", "search_web", "read_file", "http_get"}
+    if any(s.tool in data_tools for s in norm_steps):
+        if plan_summary and not _is_internal_summary(plan_summary):
+            return plan_summary
+
     return "任务已完成。"
 
 

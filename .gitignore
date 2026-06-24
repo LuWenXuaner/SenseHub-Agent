@@ -78,3 +78,7 @@ Desktop.ini
 *.bak
 *.tmp
 /tmp/
+result/
+*.tsbuildinfo
+
+启动与提交.md

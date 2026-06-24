@@ -11,6 +11,7 @@ import { ProductMatrixRow } from "@/components/marketing/ProductMatrixRow";
 import { EcosystemGrid } from "@/components/marketing/EcosystemGrid";
 import { DeveloperVoiceGraph } from "@/components/marketing/DeveloperVoiceGraph";
 import { AboutSection } from "@/components/marketing/AboutSection";
+import { NEWS_HOME_LIMIT, NewsPager } from "@/components/marketing/NewsPager";
 import { useInView } from "@/hooks/useInView";
 import { useLocale } from "@/context/LocaleContext";
 
@@ -26,6 +27,11 @@ export function HomePage() {
     "console-launch": "/claw",
     "studio-multimodal": "/studio",
     "token-plan": "/token-plan",
+    "model-lineup-2026": "/models",
+    "chat-ui-upgrade": "/studio",
+    "points-invite": "/console/points",
+    "code-agent-beta": "/code",
+    "session-privacy": "/product/api",
   };
 
   return (
@@ -45,7 +51,7 @@ export function HomePage() {
             </Link>
           </div>
           <div className="mimo-news-grid mimo-reveal-stagger mt-8">
-            {t.news.map((item) => (
+            {t.news.slice(0, NEWS_HOME_LIMIT).map((item) => (
               <article key={item.slug} className="mimo-news-card mimo-card-static mimo-reveal-item">
                 <h3 className="text-base font-semibold leading-snug">{item.title}</h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-mimo-muted">{item.summary}</p>

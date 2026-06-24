@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { AgentChatAvatar, UserChatAvatar } from "@/components/chat/ChatAvatar";
-import { ChatMessageContent } from "@/components/chat/ChatMessageContent";
-import { Check, ChevronDown, ChevronRight, Ear, Loader2, MessageSquarePlus, Mic, Monitor, Pause, Send, Square, Waves, X } from "lucide-react";
+import { Ear, MessageSquarePlus, Mic, Monitor, Send, Square, Waves } from "lucide-react";
 import { api, getToken, HubCommandResult, Task, VoiceCommandResult } from "@/lib/api";
 import {
   buildChatHistory,
@@ -12,7 +10,6 @@ import {
   mergeThinkingSteps,
   resolveDisplayText,
   taskFromResponse,
-  type ThinkingStep,
 } from "@/lib/thinkingTrace";
 import { clearJpegCanvas, drawJpegToCanvas } from "@/lib/jpegPreview";
 import { useAuth } from "@/context/AuthContext";
@@ -22,11 +19,17 @@ import { useBackendWakeListen } from "@/hooks/useBackendWakeListen";
 import { useCameraStream } from "@/hooks/useCameraStream";
 import { openMicStream, startHoldRecording } from "@/lib/wakeWord";
 import { speakExecutionAck, speakReply } from "@/lib/speakFeedback";
-import { ConfirmPanel } from "@/components/tasks/ConfirmPanel";
+import { releaseWebFocus } from "@/lib/releaseWebFocus";
+import { ConsoleBrainRouting } from "@/components/console/ConsoleBrainRouting";
+import { ConsoleSavePathPicker } from "@/components/hub/ConsoleSavePathPicker";
+import { HubChatLog } from "@/components/hub/HubChatLog";
 import {
   createHubSession,
   loadHubSessions,
+  loadDeletedSessionIds,
+  markSessionDeleted,
   messagesToLogs,
+  replaceSessionId,
   saveHubSessions,
   serverSessionToHub,
   sessionTitleFromLogs,
@@ -34,8 +37,8 @@ import {
   type HubLogItem,
   type HubSession,
 } from "@/lib/hubSessions";
+import { userStorageScope } from "@/lib/userScope";
 
-type StepStatus = ThinkingStep["status"];
 type LogItem = HubLogItem;
 
 function shouldOpenVirtualScreenPage(res: HubCommandResult): boolean {
@@ -44,52 +47,6 @@ function shouldOpenVirtualScreenPage(res: HubCommandResult): boolean {
     if (typeof s !== "object" || !s) return false;
     return String((s as Record<string, unknown>).tool || "") === "virtual_screen_start";
   });
-}
-
-function StepIcon({ status }: { status: StepStatus }) {
-  if (status === "running") return <Loader2 size={12} className="animate-spin text-primary" aria-hidden />;
-  if (status === "error") return <X size={12} className="text-danger" aria-hidden />;
-  return <Check size={12} className="text-success" aria-hidden />;
-}
-
-function ThinkingPanel({
-  steps,
-  open,
-  onToggle,
-  busy,
-}: {
-  steps: ThinkingStep[];
-  open: boolean;
-  onToggle: () => void;
-  busy?: boolean;
-}) {
-  if (!steps.length) return null;
-  const done = steps.filter((s) => s.status === "done").length;
-  return (
-    <div className="mt-3">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex items-center gap-1.5 text-xs text-text-secondary transition hover:text-text-primary"
-      >
-        {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-        <span>{busy ? "执行中…" : `执行过程 · ${done}/${steps.length}`}</span>
-      </button>
-      {open && (
-        <div className="mt-2 space-y-2.5 border-l border-border/70 pl-3">
-          {steps.map((step) => (
-            <div key={step.id} className="text-xs">
-              <div className="flex items-center gap-2 text-text-primary">
-                <StepIcon status={step.status} />
-                <span className="font-medium">{step.label}</span>
-              </div>
-              {step.detail && <p className="ml-5 mt-0.5 leading-relaxed text-text-secondary">{step.detail}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function StatusPill({ active, children }: { active?: boolean; children: ReactNode }) {
@@ -151,32 +108,51 @@ function NewSessionButton({ onClick, label }: { onClick: () => void; label: stri
 }
 
 export function HubPage() {
-  const { license, refreshLicense } = useAuth();
+  const { license, refreshLicense, user } = useAuth();
+  const scope = userStorageScope(user?.username);
   const { t } = useLocale();
   const { setApi: setClawSessionApi } = useClawSessionBridge();
   const c = t.claw;
   const navigate = useNavigate();
-  const initialSessions = loadHubSessions();
-  const bootstrap = initialSessions[0] ?? createHubSession();
-  const [sessions, setSessions] = useState<HubSession[]>(initialSessions.length ? initialSessions : [bootstrap]);
-  const [sessionId, setSessionId] = useState(bootstrap.id);
+  const [sessions, setSessions] = useState<HubSession[]>([]);
+  const [sessionId, setSessionId] = useState("");
+  const [logs, setLogs] = useState<LogItem[]>([]);
   const [text, setText] = useState("");
-  const [logs, setLogs] = useState<LogItem[]>(bootstrap.logs);
   const [loading, setLoading] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [stoppingLogId, setStoppingLogId] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [virtual, setVirtual] = useState({ active: false, calibrated: false, show_keyboard: false });
   const [wakeListening, setWakeListening] = useState(false);
   const [wakeHint, setWakeHint] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const logsScrollRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const virtualWsRef = useRef<WebSocket | null>(null);
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const holdRecRef = useRef<{ stop: () => Promise<Blob> } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pollAbortRef = useRef(false);
-  const activeRunRef = useRef<{ logId: string; taskId?: string } | null>(null);
+  const activeRunRef = useRef<{ logId: string; taskId?: string; sessionId: string } | null>(null);
+  const stoppedRunsRef = useRef<Set<string>>(new Set());
+  const userTouchedSessionRef = useRef(false);
+  const sessionIdRef = useRef(sessionId);
+  const busySessionIdRef = useRef<string | null>(null);
+  const [busySessionId, setBusySessionId] = useState<string | null>(null);
   const maxTier = license?.tier === "max";
   const ttsEnabled = Boolean(license?.features?.tts_feedback);
+  const isCurrentSessionBusy = busySessionId === sessionId;
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  const setBusySession = useCallback((sid: string | null) => {
+    busySessionIdRef.current = sid;
+    setBusySessionId(sid);
+    setLoading(sid === sessionIdRef.current);
+  }, []);
 
   const persistSession = useCallback((nextLogs: LogItem[], sid: string) => {
     setSessions((prev) => {
@@ -189,39 +165,55 @@ export function HubPage() {
         logs: nextLogs,
       };
       const next = upsertHubSession(prev, updated);
-      saveHubSessions(next);
+      saveHubSessions(next, scope);
       return next;
     });
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     let cancelled = false;
+    const deleted = loadDeletedSessionIds(scope);
+    const local = loadHubSessions(scope).filter((s) => !deleted.has(s.id));
+    const bootstrap = local[0] ?? createHubSession();
+    const initialList = local.length ? local : [bootstrap];
+    setSessions(initialList);
+    setSessionId(bootstrap.id);
+    setLogs(bootstrap.logs);
+
     void (async () => {
       try {
-        const local = loadHubSessions();
         const res = await api.listSessions("hub");
         if (cancelled || !res.sessions?.length) return;
-        const serverIds = new Set(res.sessions.map((s) => s.session_id));
-        const mapped = res.sessions.map((s) => {
-          const localMatch = local.find((l) => l.id === s.session_id);
-          return localMatch ?? serverSessionToHub(s);
+        const deleted = loadDeletedSessionIds(scope);
+        setSessions((prev) => {
+          const mapped = res.sessions
+            .filter((s) => !deleted.has(s.session_id))
+            .map((s) => {
+              const localMatch = prev.find((l) => l.id === s.session_id);
+              return localMatch ?? serverSessionToHub(s);
+            });
+          const serverIds = new Set(mapped.map((s) => s.id));
+          const localOnly = prev.filter((l) => !serverIds.has(l.id) && !deleted.has(l.id));
+          const merged = [...mapped, ...localOnly].sort((a, b) => b.updatedAt - a.updatedAt);
+          saveHubSessions(merged, scope);
+          return merged;
         });
-        const localOnly = local.filter((l) => !serverIds.has(l.id));
-        const merged = [...mapped, ...localOnly].sort((a, b) => b.updatedAt - a.updatedAt);
-        setSessions(merged);
-        const active = merged[0];
+        if (userTouchedSessionRef.current || cancelled) return;
+        const mapped = res.sessions
+          .filter((s) => !deleted.has(s.session_id))
+          .map((s) => serverSessionToHub(s));
+        const active = mapped.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        if (!active) return;
         setSessionId(active.id);
-        if (active.logs.length) {
-          setLogs(active.logs);
-        } else {
-          try {
-            const detail = await api.getSession(active.id);
-            if (!cancelled && detail.messages?.length) {
-              setLogs(messagesToLogs(detail.messages));
-            }
-          } catch {
-            /* keep empty */
+        try {
+          const detail = await api.getSession(active.id);
+          if (!cancelled && detail.messages?.length) {
+            setLogs(messagesToLogs(detail.messages));
+          } else {
+            setLogs([]);
           }
+        } catch {
+          if (!cancelled) setLogs([]);
         }
       } catch {
         // 离线或未登录时沿用 localStorage
@@ -230,7 +222,7 @@ export function HubPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -252,13 +244,41 @@ export function HubPage() {
     return () => ws.close();
   }, [sessionId]);
 
+  const patchLogsForSession = useCallback(
+    (sid: string, mutator: (logs: LogItem[]) => LogItem[]) => {
+      if (sid === sessionIdRef.current) {
+        setLogs((prev) => mutator(prev));
+        return;
+      }
+      setSessions((prev) => {
+        const target = prev.find((s) => s.id === sid);
+        if (!target) return prev;
+        const nextLogs = mutator(target.logs);
+        const updated: HubSession = {
+          ...target,
+          logs: nextLogs,
+          title: sessionTitleFromLogs(nextLogs),
+          updatedAt: Date.now(),
+        };
+        const next = upsertHubSession(prev, updated);
+        saveHubSessions(next, scope);
+        return next;
+      });
+    },
+    [scope]
+  );
+
   const patchLog = (id: string, patch: Partial<LogItem>) => {
     setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   };
 
   const applyTaskToLog = useCallback((task: Task, logId?: string) => {
-    setLogs((prev) =>
+    if (stoppedRunsRef.current.has(task.task_id)) return;
+    const ownerSid = activeRunRef.current?.sessionId ?? sessionIdRef.current;
+    const mutator = (prev: LogItem[]) =>
       prev.map((l) => {
+        if (logId && stoppedRunsRef.current.has(logId)) return l;
+        if (l.taskId && stoppedRunsRef.current.has(l.taskId)) return l;
         if (logId ? l.id === logId : l.taskId === task.task_id) {
           const patch = logPatchFromTask(task, l);
           return {
@@ -269,71 +289,95 @@ export function HubPage() {
           };
         }
         return l;
-      })
-    );
-  }, []);
+      });
+    patchLogsForSession(ownerSid, mutator);
+  }, [patchLogsForSession]);
 
   const pollTaskUntilSettled = useCallback(
-    async (taskId: string, logId: string) => {
+    async (taskId: string, logId: string, ownerSessionId: string) => {
       pollAbortRef.current = false;
       for (let i = 0; i < 40; i += 1) {
         if (pollAbortRef.current) return;
-        await new Promise((r) => window.setTimeout(r, 1200));
+        await new Promise((r) => window.setTimeout(r, 800));
         if (pollAbortRef.current) return;
         try {
           const task = await api.getTask(taskId);
+          if (pollAbortRef.current || stoppedRunsRef.current.has(taskId) || stoppedRunsRef.current.has(logId)) {
+            return;
+          }
           applyTaskToLog(task, logId);
           if (isTerminalTask(task) || task.status === "wait_confirm") {
-            setLoading(false);
+            if (busySessionIdRef.current === ownerSessionId) {
+              setBusySession(null);
+            }
             activeRunRef.current = null;
             abortRef.current = null;
+            releaseWebFocus();
             return;
           }
         } catch {
-          setLoading(false);
+          if (busySessionIdRef.current === ownerSessionId) {
+            setBusySession(null);
+          }
           activeRunRef.current = null;
           abortRef.current = null;
           return;
         }
       }
-      setLoading(false);
+      if (busySessionIdRef.current === ownerSessionId) {
+        setBusySession(null);
+      }
       activeRunRef.current = null;
       abortRef.current = null;
     },
-    [applyTaskToLog]
+    [applyTaskToLog, setBusySession]
   );
 
-  const stopActiveRun = useCallback(async () => {
+  const stopActiveRun = useCallback(() => {
     pollAbortRef.current = true;
     abortRef.current?.abort();
     const active = activeRunRef.current;
-    try {
-      if (active?.taskId) await api.cancelTask(active.taskId);
-      await api.killSwitch();
-      await fetch("/api/kill-switch/reset", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${getToken() || ""}` },
-      }).catch(() => {});
-    } catch {
-      // ignore
-    }
-    if (active?.logId) {
-      patchLog(active.logId, {
-        text: "已停止执行",
-        status: "error",
-        thinkingOpen: false,
-      });
-    }
+    const ownerSid = active?.sessionId ?? busySessionIdRef.current ?? sessionIdRef.current;
+    if (active?.logId) stoppedRunsRef.current.add(active.logId);
+    if (active?.taskId) stoppedRunsRef.current.add(active.taskId);
+
+    setStopping(false);
+    setStoppingLogId(null);
+    setBusySession(null);
     activeRunRef.current = null;
     abortRef.current = null;
-    setLoading(false);
-  }, []);
+
+    if (active?.logId) {
+      patchLogsForSession(ownerSid, (prev) =>
+        prev.map((l) => {
+          if (l.id !== active.logId) return l;
+          return {
+            ...l,
+            text: c.stopped,
+            status: "error" as const,
+            thinkingOpen: false,
+            thinking: l.thinking?.map((s) =>
+              s.status === "running" || s.status === "pending"
+                ? { ...s, status: "error" as const, detail: c.stopped }
+                : s
+            ),
+          };
+        })
+      );
+    }
+
+    void Promise.all([
+      api.killSwitch().catch(() => {}),
+      active?.taskId ? api.cancelTask(active.taskId).catch(() => {}) : Promise.resolve(),
+    ]);
+  }, [c.stopped, patchLogsForSession, setBusySession]);
 
   const startNewSession = useCallback(async () => {
-    if (loading) {
-      const ok = window.confirm("当前正在执行，开启新会话将停止任务。继续？");
+    userTouchedSessionRef.current = true;
+    if (busySessionIdRef.current) {
+      const ok = window.confirm("当前有任务正在执行，开启新会话将停止该任务。继续？");
       if (!ok) return;
-      await stopActiveRun();
+      stopActiveRun();
     }
     persistSession(logs, sessionId);
     let fresh = createHubSession();
@@ -346,17 +390,22 @@ export function HubPage() {
     }
     setSessions((prev) => {
       const next = upsertHubSession(prev, fresh);
-      saveHubSessions(next);
+      saveHubSessions(next, scope);
       return next;
     });
     setSessionId(fresh.id);
+    sessionIdRef.current = fresh.id;
     setLogs([]);
     setText("");
-    setLoading(false);
+    setStopping(false);
+    setStoppingLogId(null);
     pollAbortRef.current = true;
     abortRef.current?.abort();
     activeRunRef.current = null;
-  }, [loading, logs, sessionId, persistSession, stopActiveRun, t.studio.newChat]);
+    if (busySessionIdRef.current) {
+      setBusySession(null);
+    }
+  }, [logs, sessionId, persistSession, stopActiveRun, t.studio.newChat, scope, setBusySession]);
 
   useEffect(() => {
     const onNew = () => void startNewSession();
@@ -367,15 +416,18 @@ export function HubPage() {
   const switchSession = useCallback(
     async (targetId: string) => {
       if (targetId === sessionId) return;
-      if (loading) {
-        const ok = window.confirm("切换会话将停止当前任务。继续？");
+      userTouchedSessionRef.current = true;
+      if (busySessionIdRef.current) {
+        const ok = window.confirm("切换会话将停止当前正在执行的任务。继续？");
         if (!ok) return;
-        await stopActiveRun();
+        stopActiveRun();
       }
       persistSession(logs, sessionId);
       const target = sessions.find((s) => s.id === targetId);
       if (!target) return;
       setSessionId(target.id);
+      sessionIdRef.current = target.id;
+      setLoading(busySessionIdRef.current === target.id);
       try {
         const detail = await api.getSession(targetId);
         setLogs(detail.messages?.length ? messagesToLogs(detail.messages) : target.logs);
@@ -384,37 +436,65 @@ export function HubPage() {
       }
       setText("");
     },
-    [loading, logs, sessionId, sessions, persistSession, stopActiveRun]
+    [logs, sessionId, sessions, persistSession, stopActiveRun]
+  );
+
+  const remapSessionId = useCallback(
+    (oldId: string, newId: string) => {
+      if (!oldId || !newId || oldId === newId) return;
+      setSessions((prev) => {
+        const next = replaceSessionId(prev, oldId, newId);
+        saveHubSessions(next, scope);
+        return next;
+      });
+      if (sessionIdRef.current === oldId) {
+        sessionIdRef.current = newId;
+        setSessionId(newId);
+      }
+    },
+    [scope]
   );
 
   const deleteSession = useCallback(
-    (targetId: string) => {
+    async (targetId: string) => {
       const target = sessions.find((s) => s.id === targetId);
       if (!target) return;
       const ok = window.confirm(`删除会话「${target.title}」？此操作不可恢复。`);
       if (!ok) return;
-      void api.deleteSession(targetId).catch(() => {});
+      markSessionDeleted(targetId, scope);
+      try {
+        await api.deleteSession(targetId);
+      } catch {
+        // 本地墓碑已写入；服务端可能已是 404（临时 UUID 未入库）
+      }
       const remaining = sessions.filter((s) => s.id !== targetId);
       if (targetId === sessionId) {
         const next = remaining[0] ?? createHubSession();
         const list = remaining.length ? remaining : [next];
-        saveHubSessions(list);
+        saveHubSessions(list, scope);
         setSessions(list);
         setSessionId(next.id);
+        sessionIdRef.current = next.id;
         setLogs(next.logs);
         setText("");
       } else {
-        saveHubSessions(remaining);
+        saveHubSessions(remaining, scope);
         setSessions(remaining);
       }
     },
-    [sessionId, sessions]
+    [sessionId, sessions, scope]
   );
 
   useEffect(() => {
-    setClawSessionApi({ sessions, sessionId, switchSession, deleteSession });
+    setClawSessionApi({
+      sessions,
+      sessionId,
+      switchSession,
+      deleteSession,
+      newSession: () => void startNewSession(),
+    });
     return () => setClawSessionApi(null);
-  }, [sessions, sessionId, switchSession, deleteSession, setClawSessionApi]);
+  }, [sessions, sessionId, switchSession, deleteSession, startNewSession, setClawSessionApi]);
 
   const pushLog = (role: LogItem["role"], textValue: string, extra?: Partial<LogItem>) => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
@@ -424,7 +504,12 @@ export function HubPage() {
   };
 
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = logsScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    if (document.activeElement === el) {
+      releaseWebFocus();
+    }
   }, [logs]);
 
   const onFrame = useCallback((payload: { image: string }) => {
@@ -466,9 +551,12 @@ export function HubPage() {
         const data = JSON.parse(ev.data);
         if (data.type !== "task_update" || !data.task?.task_id) return;
         const task = data.task as Task;
+        if (stoppedRunsRef.current.has(task.task_id)) return;
         applyTaskToLog(task);
         if (isTerminalTask(task)) {
-          setLoading(false);
+          if (busySessionIdRef.current) {
+            setBusySession(null);
+          }
           activeRunRef.current = null;
           abortRef.current = null;
         }
@@ -504,7 +592,10 @@ export function HubPage() {
 
   const submit = async (autonomous = false, explicitText?: string, fromVoice = false) => {
     const cmd = (explicitText ?? text).trim();
-    if (!cmd || loading) return;
+    if (!cmd || isCurrentSessionBusy || stopping) return;
+
+    setStopping(false);
+    setStoppingLogId(null);
 
     try {
       await fetch("/api/kill-switch/reset", {
@@ -515,19 +606,23 @@ export function HubPage() {
       // ignore
     }
 
+    const runSessionId = sessionId;
     const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 120_000);
     abortRef.current = controller;
     pollAbortRef.current = false;
-    setLoading(true);
+    setBusySession(runSessionId);
     const history = buildChatHistory(logs);
     pushLog("user", cmd);
     if (!explicitText) setText("");
+    inputRef.current?.blur();
+    releaseWebFocus();
     const pendingId = pushLog("system", "", {
       status: "thinking",
       thinking: [],
       thinkingOpen: true,
     });
-    activeRunRef.current = { logId: pendingId };
+    activeRunRef.current = { logId: pendingId, sessionId: runSessionId };
 
     try {
       const res: HubCommandResult | VoiceCommandResult = autonomous
@@ -538,8 +633,11 @@ export function HubPage() {
 
       if (controller.signal.aborted) return;
 
-      if (res.session_id && res.session_id !== sessionId) {
+      if (res.session_id && res.session_id !== runSessionId) {
+        remapSessionId(runSessionId, res.session_id);
+      } else if (res.session_id && res.session_id !== sessionId) {
         setSessionId(res.session_id);
+        sessionIdRef.current = res.session_id;
       }
 
       const task = taskFromResponse(res);
@@ -550,7 +648,7 @@ export function HubPage() {
         ? "该操作需你确认后才会继续执行"
         : resolveDisplayText(res, task, isPendingTask);
 
-      if (res.task_id) activeRunRef.current = { logId: pendingId, taskId: res.task_id };
+      if (res.task_id) activeRunRef.current = { logId: pendingId, taskId: res.task_id, sessionId: runSessionId };
 
       patchLog(pendingId, {
         text: display,
@@ -568,31 +666,31 @@ export function HubPage() {
         taskSnapshot: task && isTerminalTask(task) ? task : undefined,
       });
 
+      const action =
+        res.action || (res.task_id ? "execute" : "matched" in res && res.matched === false ? "error" : "answer");
+      const isDesktopExecute = action === "execute" || action === "task" || action === "autonomous";
+      if (isDesktopExecute) {
+        requestAnimationFrame(() => releaseWebFocus());
+      }
+
       if (isWaitConfirm) {
-        setLoading(false);
+        setBusySession(null);
         activeRunRef.current = null;
         abortRef.current = null;
       } else if (isPendingTask && res.task_id) {
-        void pollTaskUntilSettled(res.task_id, pendingId);
+        void pollTaskUntilSettled(res.task_id, pendingId, runSessionId);
       } else {
         activeRunRef.current = null;
         abortRef.current = null;
-        setLoading(false);
-        if (res.reply && ttsEnabled) await speakReply(display, { enabled: ttsEnabled });
+        setBusySession(null);
+        if (!isDesktopExecute && res.reply && ttsEnabled) await speakReply(display, { enabled: ttsEnabled });
       }
 
-      const action =
-        res.action || (res.task_id ? "execute" : "matched" in res && res.matched === false ? "error" : "answer");
-
-      if (!isPendingTask) {
+      if (!isPendingTask && !isDesktopExecute) {
         if (action === "answer" || action === "status" || action === "cancel") {
           await speakReply(display, { enabled: ttsEnabled });
         } else if (res.reply) {
           await speakReply(display, { enabled: ttsEnabled });
-        }
-      } else if (action === "execute" || action === "task" || action === "autonomous") {
-        if (fromVoice || explicitText) {
-          await speakExecutionAck(cmd, { autonomous, enabled: ttsEnabled });
         }
       }
 
@@ -605,7 +703,16 @@ export function HubPage() {
         if (!win) navigate("/perception/virtual-screen?from=hub");
       }
     } catch (e) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || stoppedRunsRef.current.has(pendingId)) {
+        if (controller.signal.aborted && !stoppedRunsRef.current.has(pendingId)) {
+          patchLog(pendingId, {
+            text: "请求超时或已中断，请重试或点击停止。",
+            status: "error",
+            thinkingOpen: false,
+          });
+        }
+        return;
+      }
       patchLog(pendingId, {
         text: formatUserFacingError(e instanceof Error ? e.message : "失败"),
         status: "error",
@@ -613,10 +720,11 @@ export function HubPage() {
       });
       activeRunRef.current = null;
       abortRef.current = null;
-      setLoading(false);
+      setBusySession(null);
     } finally {
-      if (!activeRunRef.current?.taskId) {
-        setLoading(false);
+      window.clearTimeout(timeoutId);
+      if (!activeRunRef.current?.taskId && busySessionIdRef.current === runSessionId) {
+        setBusySession(null);
         abortRef.current = null;
       }
       refreshVirtual();
@@ -624,9 +732,9 @@ export function HubPage() {
   };
 
   const { listening: wakeActive, lastHeard } = useBackendWakeListen({
-    enabled: wakeListening && !loading,
+    enabled: wakeListening && !isCurrentSessionBusy,
     onUtterance: (raw) => {
-      if (!loading) void submit(false, raw, true);
+      if (!isCurrentSessionBusy) void submit(false, raw, true);
     },
     onStatus: setWakeHint,
     onError: (msg) => pushLog("system", msg),
@@ -688,6 +796,8 @@ export function HubPage() {
           {wakeListening && wakeHint ? ` · ${wakeHint}` : ""}
         </span>
         <span className="ml-auto flex flex-wrap items-center gap-2">
+          <ConsoleSavePathPicker scope={scope} />
+          <ConsoleBrainRouting variant="compact" />
           <NewSessionButton onClick={() => void startNewSession()} label={c.newSession} />
           <ToggleButton active={wakeListening} onClick={() => setWakeListening((v) => !v)}>
             <Ear size={12} className="mr-1 inline" aria-hidden />
@@ -716,64 +826,29 @@ export function HubPage() {
         )}
 
         <section className={`card flex min-h-0 flex-col overflow-hidden p-3 ${showCamera ? "" : "min-h-0 flex-1"}`}>
-          <div className="min-h-0 flex-1 overflow-y-auto text-sm">
-            <div className="flex min-h-full flex-col justify-end gap-2">
+          <div ref={logsScrollRef} className="min-h-0 flex-1 overflow-y-auto text-sm">
+            <div className="hub-chat-area flex min-h-full flex-col justify-end">
               {logs.length === 0 && (
-                <p className="py-4 text-center text-xs text-text-secondary">{c.emptyHint}</p>
+                <p className="py-8 text-center text-xs text-text-secondary">{c.emptyHint}</p>
               )}
               {logs.map((l) => (
-                <div
+                <HubChatLog
                   key={l.id}
-                  className={`rounded-lg px-3 py-2 ${
-                    l.role === "user" ? "bg-primary/10 text-primary" : "bg-surface-elevated text-text-primary"
-                  }`}
-                >
-                  {l.role === "user" ? (
-                    <div className="flex items-start gap-2.5">
-                      <UserChatAvatar />
-                      <span className="min-w-0 flex-1 pt-1">{l.text}</span>
-                    </div>
-                  ) : (
-                    <>
-                      {l.status === "thinking" && !l.text ? (
-                        <div className="flex items-start gap-2.5 text-text-secondary">
-                          <AgentChatAvatar />
-                          <div className="flex items-center gap-2 pt-1">
-                            <Loader2 size={14} className="animate-spin" aria-hidden />
-                            <span>思考中…</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-start gap-2.5">
-                          <AgentChatAvatar />
-                          <div className="min-w-0 flex-1">
-                            <ChatMessageContent text={l.text} />
-                          </div>
-                        </div>
-                      )}
-                      {l.confirmTask && (
-                        <ConfirmPanel
-                          compact
-                          task={l.confirmTask}
-                          onUpdate={(updated) => {
-                            applyTaskToLog(updated, l.id);
-                            if (updated.status === "running") {
-                              void pollTaskUntilSettled(updated.task_id, l.id);
-                            }
-                          }}
-                        />
-                      )}
-                      {l.thinking && l.thinking.length > 0 && (
-                        <ThinkingPanel
-                          steps={l.thinking}
-                          open={Boolean(l.thinkingOpen)}
-                          busy={l.status === "thinking"}
-                          onToggle={() => patchLog(l.id, { thinkingOpen: !l.thinkingOpen })}
-                        />
-                      )}
-                    </>
-                  )}
-                </div>
+                  log={l}
+                  stopping={stopping && stoppingLogId === l.id}
+                  labels={{
+                    you: c.you,
+                    agent: c.agent,
+                    thinking: c.thinking,
+                    stopping: c.stopping,
+                    busy: c.executing,
+                    process: (done, total) =>
+                      c.processProgress.replace("{done}", String(done)).replace("{total}", String(total)),
+                  }}
+                  onPatch={(patch) => patchLog(l.id, patch)}
+                  onApplyTask={applyTaskToLog}
+                  onPollTask={(taskId, logId) => void pollTaskUntilSettled(taskId, logId, sessionId)}
+                />
               ))}
               <div ref={logsEndRef} />
             </div>
@@ -781,6 +856,7 @@ export function HubPage() {
 
           <div className="mt-3 flex shrink-0 gap-2 border-t border-border pt-3">
             <textarea
+              ref={inputRef}
               className="input min-h-[2.5rem] min-w-0 flex-1 resize-none py-2 leading-relaxed"
               placeholder="输入指令或问题（Enter 发送，Shift+Enter 换行）"
               rows={2}
@@ -789,7 +865,7 @@ export function HubPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  if (!loading) void submit(false);
+                  if (!isCurrentSessionBusy) void submit(false);
                 }
               }}
             />
@@ -804,12 +880,12 @@ export function HubPage() {
             )}
             <button
               type="button"
-              className={loading ? "btn-danger shrink-0" : "btn-primary shrink-0"}
-              onClick={() => (loading ? void stopActiveRun() : void submit(false))}
-              aria-label={loading ? "停止执行" : "发送"}
-              title={loading ? "停止执行" : "发送"}
+              className={isCurrentSessionBusy ? "btn-danger shrink-0" : "btn-primary shrink-0"}
+              onClick={() => (isCurrentSessionBusy ? stopActiveRun() : void submit(false))}
+              aria-label={isCurrentSessionBusy ? c.stopRun : c.send}
+              title={isCurrentSessionBusy ? c.stopRun : c.send}
             >
-              {loading ? <Pause size={16} aria-hidden /> : <Send size={16} aria-hidden />}
+              {isCurrentSessionBusy ? <Square size={16} aria-hidden /> : <Send size={16} aria-hidden />}
             </button>
           </div>
         </section>

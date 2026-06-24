@@ -13,6 +13,9 @@ export const TOOL_LABEL: Record<string, string> = {
   list_windows: "查看窗口列表",
   active_window: "查看前台窗口",
   type_text: "输入文字",
+  save_notepad: "保存记事本",
+  notepad_type_save: "记事本输入并保存",
+  wechat_send_message: "微信发消息",
   press_key: "按键操作",
   hotkey: "快捷键",
   click: "鼠标点击",
@@ -21,6 +24,7 @@ export const TOOL_LABEL: Record<string, string> = {
   fetch_url: "抓取网页内容",
   get_weather: "查询天气",
   screenshot: "截取屏幕",
+  generate_document: "生成文档",
   write_file: "写入文件",
   read_file: "读取文件",
   list_dir: "列出目录",
@@ -43,6 +47,12 @@ export const TOOL_LABEL: Record<string, string> = {
 export function formatUserFacingError(msg: string): string {
   const t = msg.trim();
   if (!t) return "执行遇到问题，请稍后重试";
+  if (t.includes("当前模型不可用")) {
+    return "当前模型不可用，请切换其他模型";
+  }
+  if (t.includes("对话不可用") && (t.includes("API") || t.includes("模型") || t.includes("Key"))) {
+    return "当前模型不可用，请切换其他模型";
+  }
   if (t.includes("意图脑不可用")) {
     return "大脑服务暂时不可用，请检查模型 API 配置或网络后重试";
   }
@@ -95,6 +105,25 @@ function formatStepResult(step: PlanStep, result?: StepResult): string {
     return `已启动 ${out.name || step.params?.name || "应用"}`;
   }
   if (step.tool === "write_file") return out.path ? `已保存到 ${out.path}` : "文件已写入";
+  if (step.tool === "save_notepad" || step.tool === "notepad_type_save") {
+    const path = out.saved_path ? String(out.saved_path) : "";
+    const text = out.text ? String(out.text).slice(0, 24) : "";
+    if (path && text) return `已输入「${text}」并保存到 ${path}`;
+    if (path) return `已保存到 ${path}`;
+    return "已完成";
+  }
+  if (step.tool === "wechat_send_message") {
+    const contact = out.contact ? String(out.contact) : step.params?.contact ? String(step.params.contact) : "";
+    const msg = out.message ? String(out.message).slice(0, 24) : "";
+    const sent = out.sent === true;
+    if (contact && msg) return sent ? `已向「${contact}」发送「${msg}」` : `已在与「${contact}」的会话中输入「${msg}」`;
+    if (contact) return sent ? `已向「${contact}」发送消息` : `已打开与「${contact}」的会话`;
+    return sent ? "消息已发送" : "消息已输入";
+  }
+  if (step.tool === "close_app") {
+    const title = out.window_title ? String(out.window_title) : out.closed ? String(out.closed) : "";
+    return title ? `已关闭「${title}」` : "窗口已关闭";
+  }
   if (step.tool === "get_weather") {
     const loc = out.location ? String(out.location) : "";
     const src = out.source ? String(out.source) : "天气服务";
@@ -196,6 +225,7 @@ export function buildThinkingSteps(
   const steps: ThinkingStep[] = [];
   let idx = 0;
   let displayStep = 0;
+  let hadExecutor = false;
   const push = (title: string, detail?: string, status: StepStatus = "done") => {
     displayStep += 1;
     steps.push({ id: `s-${idx++}`, label: `${displayStep}. ${title}`, detail, status });
@@ -224,16 +254,41 @@ export function buildThinkingSteps(
       push("安全审查", passed ? "操作风险可接受，允许执行" : String(agent.reason || "已拦截"), passed ? "done" : "error");
     } else if (role === "skill") {
       push("加载规程", String(agent.name || agent.id || "Skill"));
+    } else if (role === "synthesizer") {
+      const target = String(agent.target_tool || "");
+      const preview = String(agent.preview || "").trim();
+      push(
+        "内容合成",
+        preview
+          ? `为「${TOOL_LABEL[target] || target}」生成正文：${preview.slice(0, 80)}…`
+          : `根据取证结果为「${TOOL_LABEL[target] || target}」撰写正文`,
+        agent.status === "error" ? "error" : "done"
+      );
+    } else if (role === "intent_chain") {
+      /* 与 executor 重复记录，仅 UI 展示时跳过 */
     } else if (role === "agent_loop") {
-      const thought = String(agent.thought || "").trim();
-      const tool = String(agent.tool || "");
-      const detail = [thought, tool ? `→ ${TOOL_LABEL[tool] || tool}` : ""].filter(Boolean).join(" ");
-      const status: StepStatus =
-        agent.status === "wait_confirm" ? "running" : agent.error ? "error" : "done";
-      if (detail || agent.iteration) {
-        push("执行脑", detail || "选择工具并执行", status);
+      const loopStatus = String(agent.status || "");
+      if (loopStatus === "done" || loopStatus === "quick_plan") {
+        /* 结束标记 / 捷径计划，不单独占一步 */
+      } else if (loopStatus === "running" && agent.iteration == null) {
+        /* 循环启动占位，完成后由 finalizeThinkingSteps 收敛 */
+      } else {
+        const thought = String(agent.thought || "").trim();
+        const tool = String(agent.tool || "");
+        const action = String(agent.action || "").toLowerCase();
+        const detail = [thought, tool ? `→ ${TOOL_LABEL[tool] || tool}` : ""].filter(Boolean).join(" ");
+        if (!detail && (action === "finish" || action === "tool") && hadExecutor) {
+          /* FC 已在 executor 中展示，跳过空 finish 占位 */
+        } else {
+          const status: StepStatus =
+            loopStatus === "wait_confirm" ? "running" : agent.error ? "error" : "done";
+          if (detail || agent.iteration) {
+            push("执行脑", detail || "选择工具并执行", status);
+          }
+        }
       }
     } else if (role === "executor") {
+      hadExecutor = true;
       const tool = String(agent.tool || "");
       const ok = Boolean(agent.success);
       const output = (agent.output || {}) as Record<string, unknown>;
@@ -317,15 +372,56 @@ export function buildTaskProgressSteps(task: Task, stepOffset = 0): ThinkingStep
   return steps;
 }
 
+function isSuccessfulTerminal(res: HubCommandResult | VoiceCommandResult, task?: Task | null): boolean {
+  const t = task || taskFromResponse(res);
+  if (t?.status === "wait_confirm") return false;
+  if (t && isTerminalTask(t)) return t.status === "done";
+  if (res.reply && !isInternalSummary(res.reply)) return true;
+  return false;
+}
+
+function finalizeThinkingSteps(steps: ThinkingStep[], terminal: boolean): ThinkingStep[] {
+  if (!terminal) return steps;
+  return steps.map((s) =>
+    s.status === "running" || s.status === "pending" ? { ...s, status: "done" as StepStatus } : s
+  );
+}
+
 export function mergeThinkingSteps(
   res: HubCommandResult | VoiceCommandResult,
   task?: Task | null
 ): ThinkingStep[] {
   const t = task || taskFromResponse(res);
   const base = buildThinkingSteps(res, t);
-  if (!t) return base;
+  const terminal = isSuccessfulTerminal(res, t);
+  if (!t) return finalizeThinkingSteps(base, terminal);
   const withoutStale = base.filter((s) => s.label !== "开始执行" && !s.id.startsWith("task-"));
-  return [...withoutStale, ...buildTaskProgressSteps(t, withoutStale.length)];
+  const agents = agentSource(res);
+  const executorCount = agents.filter((a) => a.role === "executor").length;
+  const planLen = t.plan_steps?.length ?? 0;
+  /* AgentRuntime 已写入 executor 时，不再用 task 进度重复展示同批工具步 */
+  if (planLen > 0 && executorCount >= planLen) {
+    const hasAnswer = withoutStale.some((s) => s.label.includes("汇总答复"));
+    if (!hasAnswer && t.status === "done") {
+      return finalizeThinkingSteps(
+        [
+          ...withoutStale,
+          {
+            id: "task-answer",
+            label: `${withoutStale.length + 1}. 汇总答复`,
+            detail: "全部步骤已完成",
+            status: "done" as StepStatus,
+          },
+        ],
+        terminal || t.status === "done"
+      );
+    }
+    return finalizeThinkingSteps(withoutStale, terminal || t.status === "done");
+  }
+  return finalizeThinkingSteps(
+    [...withoutStale, ...buildTaskProgressSteps(t, withoutStale.length)],
+    terminal || t.status === "done"
+  );
 }
 
 export function resolveDisplayText(

@@ -1,5 +1,23 @@
 /** 官网内容 — 面向客户的正式商业文案 */
 
+import {
+  STUDIO_MODELS,
+  getStudioModelBrandLabel,
+  groupStudioModels,
+  buildFlagshipApiModels,
+  type StudioModelBrand,
+  type StudioModelItem,
+} from './modelCatalog';
+
+export {
+  STUDIO_MODELS,
+  getStudioModelBrandLabel,
+  groupStudioModels,
+  type StudioModelBrand,
+  type StudioModelItem,
+};
+
+
 export type NewsItem = {
   slug: string;
   title: string;
@@ -66,203 +84,7 @@ const brandLogo = (brand: "qwen" | "deepseek" | "doubao" | "glm" | "zhipu" | "au
 const favicon = (domain: string) =>
   `https://www.google.com/s2/favicons?domain=${domain}&sz=256`;
 
-export const FLAGSHIP_API_MODELS: FlagshipApiModel[] = [
-  {
-    id: "qwen3-8b",
-    name: "Qwen3-8B",
-    badge: "热销",
-    imageUrl: brandLogo("qwen"),
-    imageFallback: favicon("qwen.ai"),
-    description: "轻量高效文本模型，适合日常对话、办公自动化与高频指令场景。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "60 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "120 积分 / 百万 Token" },
-      { label: "能力类型", value: "语言理解" },
-    ],
-  },
-  {
-    id: "qwen-vl",
-    name: "Qwen2.5-VL-7B",
-    badge: "视觉",
-    imageUrl: brandLogo("qwen"),
-    imageFallback: favicon("qwen.ai"),
-    description: "视觉理解大模型，支持截图分析、屏幕识别与图文混合问答。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "150 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "300 积分 / 百万 Token" },
-      { label: "能力类型", value: "视觉理解" },
-    ],
-  },
-  {
-    id: "qwen-72b",
-    name: "Qwen2.5-72B",
-    badge: "旗舰",
-    imageUrl: brandLogo("qwen"),
-    imageFallback: favicon("qwen.ai"),
-    description: "大规模文本模型，擅长复杂推理、长文档理解与专业写作。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "200 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "400 积分 / 百万 Token" },
-      { label: "能力类型", value: "语言理解" },
-    ],
-  },
-  {
-    id: "deepseek-v3",
-    name: "DeepSeek-V3",
-    badge: "推理",
-    imageUrl: brandLogo("deepseek"),
-    imageFallback: favicon("deepseek.com"),
-    description: "强推理能力，适合复杂任务规划、代码生成与深度分析。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "100 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "200 积分 / 百万 Token" },
-      { label: "能力类型", value: "语言理解" },
-    ],
-  },
-  {
-    id: "glm-4",
-    name: "GLM-4-9B",
-    badge: "语言",
-    imageUrl: brandLogo("glm"),
-    imageFallback: favicon("zhipuai.cn"),
-    description: "智谱 GLM 系列，中文理解出色，适合办公文案与知识问答。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "80 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "160 积分 / 百万 Token" },
-      { label: "能力类型", value: "语言理解" },
-    ],
-  },
-  {
-    id: "sensevoice",
-    name: "SenseVoice",
-    badge: "语音",
-    imageUrl: brandLogo("audio"),
-    imageFallback: favicon("siliconflow.cn"),
-    description: "高精度语音识别模型，支持多语种转写与实时听写场景。",
-    pricing: [
-      { label: "计费（灵枢价）", value: "50 积分 / 分钟" },
-      { label: "能力类型", value: "语音识别 ASR" },
-      { label: "供应商", value: "硅基流动" },
-    ],
-  },
-  {
-    id: "cosyvoice",
-    name: "CosyVoice",
-    badge: "语音",
-    imageUrl: brandLogo("audio"),
-    imageFallback: favicon("siliconflow.cn"),
-    description: "自然流畅的语音合成，支持多音色播报与对话朗读。",
-    pricing: [
-      { label: "计费（灵枢价）", value: "100 积分 / 万字符" },
-      { label: "能力类型", value: "语音合成 TTS" },
-      { label: "供应商", value: "硅基流动" },
-    ],
-  },
-  {
-    id: "doubao-lite",
-    name: "Doubao Lite",
-    badge: "高性价比",
-    imageUrl: brandLogo("doubao"),
-    imageFallback: favicon("volcengine.com"),
-    description: "火山方舟高性价比模型，长上下文、响应快，适合日常批量任务。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "30 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "60 积分 / 百万 Token" },
-      { label: "能力类型", value: "语言理解" },
-    ],
-  },
-  {
-    id: "doubao-pro",
-    name: "Doubao 1.5 Pro",
-    badge: "旗舰",
-    imageUrl: brandLogo("doubao"),
-    imageFallback: favicon("volcengine.com"),
-    description: "火山方舟旗舰文本模型，综合能力强，适合复杂业务场景。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "120 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "240 积分 / 百万 Token" },
-      { label: "能力类型", value: "语言理解" },
-    ],
-  },
-  {
-    id: "doubao-vision",
-    name: "Doubao Vision",
-    badge: "视觉",
-    imageUrl: brandLogo("doubao"),
-    imageFallback: favicon("volcengine.com"),
-    description: "火山方舟视觉模型，支持图像理解、OCR 与多模态问答。",
-    pricing: [
-      { label: "输入（灵枢价）", value: "180 积分 / 百万 Token" },
-      { label: "输出（灵枢价）", value: "360 积分 / 百万 Token" },
-      { label: "能力类型", value: "视觉理解" },
-    ],
-  },
-  {
-    id: "doubao-embedding",
-    name: "Doubao Embedding",
-    badge: "向量",
-    imageUrl: brandLogo("doubao"),
-    imageFallback: favicon("volcengine.com"),
-    description: "文本向量化模型，适用于语义检索、知识库与相似度匹配。",
-    pricing: [
-      { label: "计费（灵枢价）", value: "10 积分 / 百万 Token" },
-      { label: "能力类型", value: "向量嵌入" },
-      { label: "供应商", value: "火山方舟" },
-    ],
-  },
-  {
-    id: "doubao-tts",
-    name: "Doubao TTS",
-    badge: "语音",
-    imageUrl: brandLogo("doubao"),
-    imageFallback: favicon("volcengine.com"),
-    description: "火山方舟语音合成，多种音色可选，适合播报与智能客服。",
-    pricing: [
-      { label: "计费（灵枢价）", value: "80 积分 / 万字符" },
-      { label: "能力类型", value: "语音合成 TTS" },
-      { label: "供应商", value: "火山方舟" },
-    ],
-  },
-];
-
-export const STUDIO_MODELS = [
-  {
-    id: "qwen3-8b",
-    name: "Qwen3-8B",
-    badge: "推荐",
-    description: "轻量高效，日常对话与办公自动化首选",
-  },
-  {
-    id: "qwen-vl",
-    name: "Qwen2.5-VL",
-    badge: "视觉",
-    description: "全模态理解大模型，支持图文混合问答",
-  },
-  {
-    id: "deepseek-v3",
-    name: "DeepSeek-V3",
-    badge: "推理",
-    description: "强推理能力，适合复杂分析与创作",
-  },
-  {
-    id: "doubao-pro",
-    name: "Doubao 1.5 Pro",
-    badge: "旗舰",
-    description: "火山方舟旗舰模型，综合能力强",
-  },
-  {
-    id: "sensevoice",
-    name: "SenseVoice",
-    badge: "语音",
-    description: "语音识别大模型，支持多语种转写",
-  },
-  {
-    id: "cosyvoice",
-    name: "CosyVoice",
-    badge: "语音",
-    description: "语音合成大模型，自然流畅多音色",
-  },
-] as const;
+export const FLAGSHIP_API_MODELS = buildFlagshipApiModels();
 
 export const PRODUCT_MATRIX: ProductMatrixItem[] = [
   {
@@ -389,13 +211,74 @@ export const SITE_NEWS: NewsItem[] = [
   },
   {
     slug: "studio-multimodal",
-    title: "灵枢 Studio 多模态体验升级",
+    title: "灵枢 Chat 多模态体验升级",
     summary:
-      "Studio 现已支持语音与视觉交互，零门槛感受灵枢的对话与理解能力。",
+      "Chat 现已支持语音与视觉交互，零门槛感受灵枢的对话与理解能力。",
     cta: "立即体验",
     ctaTo: "/studio",
     date: "2026-06-20",
     body: ["适合快速体验、演示汇报与话术验证，无需复杂配置即可开始对话。"],
+  },
+  {
+    slug: "model-lineup-2026",
+    title: "2026 旗舰模型矩阵全面扩容",
+    summary:
+      "新增 Qwen3.7、DeepSeek-V4、GPT-5.5、Claude 4.5、Grok 4.5 等主流系列，Chat 与模型广场同步上架。",
+    cta: "查看模型",
+    ctaTo: "/models",
+    date: "2026-06-19",
+    body: [
+      "覆盖文本、代码、视觉、语音与长文档等场景，代采接入筹备中。",
+      "已上线模型可立即在 Chat 中选择体验，其余型号标注即将上线。",
+    ],
+  },
+  {
+    slug: "chat-ui-upgrade",
+    title: "灵枢 Chat 对话体验优化",
+    summary: "全新头像与气泡样式、按品牌分组的模型选择器，对话区更清晰易读。",
+    cta: "打开 Chat",
+    ctaTo: "/studio",
+    date: "2026-06-18",
+    body: [
+      "用户与 AI 消息视觉区分更明显，长文排版与段落间距已优化。",
+      "模型菜单支持悬浮二级列表，快速切换不同厂商系列。",
+    ],
+  },
+  {
+    slug: "points-invite",
+    title: "积分签到与邀请奖励上线",
+    summary: "每日签到领积分，邀请好友注册双方均可获得奖励，可用于兑换档位与 API 额度。",
+    cta: "积分中心",
+    ctaTo: "/console/points",
+    date: "2026-06-17",
+    body: [
+      "在控制台积分中心完成签到或分享邀请链接即可累积积分。",
+      "积分可兑换 Lite / Pro / Max 档位及 API Token 包。",
+    ],
+  },
+  {
+    slug: "code-agent-beta",
+    title: "灵枢 Code 本地项目助手公测",
+    summary: "选择本地文件夹，用自然语言描述需求，Agent 直接修改项目文件。",
+    cta: "体验 Code",
+    ctaTo: "/code",
+    date: "2026-06-16",
+    body: [
+      "支持 Chrome / Edge 本地目录访问，适合快速原型与脚本整理。",
+      "对话历史按账号隔离，任务可多次迭代直至满意。",
+    ],
+  },
+  {
+    slug: "session-privacy",
+    title: "会话数据隔离与安全加固",
+    summary: "Chat、Console 历史会话按用户严格隔离，防止跨账号数据泄露。",
+    cta: "了解详情",
+    ctaTo: "/product/api",
+    date: "2026-06-15",
+    body: [
+      "后端会话 API 全面校验用户归属，前端本地缓存按账号分桶存储。",
+      "建议定期清理浏览器缓存并妥善保管登录凭证。",
+    ],
   },
   {
     slug: "token-plan",

@@ -1,4 +1,8 @@
-export type StudioMessage = { role: "user" | "assistant"; content: string };
+export type StudioMessage = {
+  role: "user" | "assistant";
+  content: string;
+  harnessTrace?: import("@/lib/harnessTrace").HarnessTrace;
+};
 
 export type StudioSession = {
   id: string;
@@ -9,8 +13,12 @@ export type StudioSession = {
   serverId?: string;
 };
 
-const STORAGE_KEY = "sensehub_studio_sessions";
+const STORAGE_PREFIX = "sensehub_studio_sessions";
 const MAX = 40;
+
+function storageKey(scope: string): string {
+  return `${STORAGE_PREFIX}::${scope}`;
+}
 
 export function studioTitleFromMessages(messages: StudioMessage[]): string {
   const first = messages.find((m) => m.role === "user" && m.content.trim())?.content.trim();
@@ -18,9 +26,9 @@ export function studioTitleFromMessages(messages: StudioMessage[]): string {
   return first.length > 28 ? `${first.slice(0, 28)}…` : first;
 }
 
-export function loadStudioSessions(): StudioSession[] {
+export function loadStudioSessions(scope = "guest"): StudioSession[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(scope));
     if (!raw) return [];
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return [];
@@ -40,9 +48,9 @@ export function loadStudioSessions(): StudioSession[] {
   }
 }
 
-export function saveStudioSessions(sessions: StudioSession[]): void {
+export function saveStudioSessions(sessions: StudioSession[], scope = "guest"): void {
   const trimmed = sessions.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  localStorage.setItem(storageKey(scope), JSON.stringify(trimmed));
 }
 
 export function createStudioSession(id?: string): StudioSession {

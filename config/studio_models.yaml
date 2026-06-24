@@ -1,0 +1,142 @@
+# 灵枢 Chat：前端 model_id → 提供商 + API 模型名
+# available: false 的项会提示用户换模型；未列出的 id 会回退到 models.yaml intent 角色
+
+models:
+  # —— Qwen · 硅基流动 ——
+  qwen3-8b:
+    provider: siliconflow
+    model: Qwen/Qwen3-8B
+  qwen-vl:
+    provider: siliconflow
+    model: Qwen/Qwen2.5-VL-7B-Instruct
+  qwen3-7-max:
+    provider: siliconflow
+    model: Qwen/Qwen3-32B
+    label: Qwen3-32B
+  qwen3-7-coder:
+    provider: siliconflow
+    model: Qwen/Qwen2.5-Coder-7B-Instruct
+  qwen3-7-long:
+    available: false
+    reason: 该模型即将上线，请先在 Chat 中选择 Qwen3-8B 等已支持模型
+  qwen3-7-vl-ultra:
+    available: false
+    reason: 多模态模型即将上线，当前请使用 Qwen2.5-VL
+  qwen3-audio:
+    available: false
+    reason: 语音模型请使用语音对话功能，暂不支持文本 Chat
+
+  # —— DeepSeek（官方 API：base_url https://api.deepseek.com，OpenAI 兼容）——
+  deepseek-v4:
+    provider: deepseek
+    model: deepseek-v4-pro
+    label: DeepSeek-V4 Pro
+  deepseek-v4-flash:
+    provider: deepseek
+    model: deepseek-v4-flash
+    label: DeepSeek-V4 Flash
+  deepseek-v3:
+    provider: deepseek
+    model: deepseek-v4-pro
+  deepseek-r1:
+    provider: deepseek
+    model: deepseek-reasoner
+  deepseek-coder-v2.5:
+    provider: deepseek
+    model: deepseek-v4-pro
+  deepseek-vl2:
+    available: false
+    reason: 视觉模型即将上线，当前请使用文本模型
+
+  # —— Doubao · 火山方舟（model 为方舟接入点/模型 ID，可按你的控制台 endpoint 修改）——
+  doubao-pro:
+    provider: volcengine
+    model: doubao-1-5-pro-32k-250115
+  doubao-2-pro:
+    provider: volcengine
+    model: doubao-1-5-pro-32k-250115
+  doubao-long-200w:
+    provider: volcengine
+    model: doubao-1-5-lite-32k-250115
+  doubao-code:
+    provider: volcengine
+    model: doubao-1-5-lite-32k-250115
+  doubao-vl-4:
+    available: false
+    reason: 视觉模型即将上线
+
+  # —— OpenAI（需在控制台配置 OpenAI Key）——
+  gpt-4.1:
+    provider: openai
+    model: gpt-4.1
+  gpt-4.1-mini:
+    provider: openai
+    model: gpt-4.1-mini
+  gpt-5.5-mini-turbo:
+    provider: openai
+    model: gpt-4o-mini
+  gpt-5.5-thinking:
+    available: false
+    reason: 该模型即将上线
+  gpt-5.5-pro:
+    available: false
+    reason: 该模型即将上线
+  gpt-4o-audio-realtime:
+    available: false
+    reason: 实时语音模型请使用语音功能
+  o3:
+    provider: openai
+    model: o3-mini
+  o4-mini:
+    available: false
+    reason: 该模型即将上线
+
+  # —— 其他品牌（暂未接入 Chat 直连）——
+  claude-opus-4.5:
+    available: false
+    reason: Claude 模型即将上线，请先在控制台关注接入进度
+  claude-sonnet-4.5:
+    available: false
+    reason: Claude 模型即将上线
+  claude-haiku-4.5-flash:
+    available: false
+    reason: Claude 模型即将上线
+  claude-opus-4:
+    available: false
+    reason: 该模型即将上线
+  claude-sonnet-4:
+    available: false
+    reason: 该模型即将上线
+  claude-3.7-sonnet:
+    available: false
+    reason: 该模型即将上线
+  grok-4.5-expert:
+    available: false
+    reason: Grok 模型即将上线
+  grok-4.5-auto:
+    available: false
+    reason: Grok 模型即将上线
+  grok-4.5-fast:
+    available: false
+    reason: Grok 模型即将上线
+  grok-4.3:
+    available: false
+    reason: 该模型即将上线
+  grok-4.3-mini:
+    available: false
+    reason: 该模型即将上线
+  gemini-2.5-pro:
+    available: false
+    reason: Gemini 模型即将上线
+  gemini-2.5-flash:
+    available: false
+    reason: Gemini 模型即将上线
+  gemini-2.0-flash:
+    available: false
+    reason: Gemini 模型即将上线
+  sensevoice:
+    available: false
+    reason: 语音识别模型请使用语音功能
+  cosyvoice:
+    available: false
+    reason: 语音合成模型请使用语音功能
