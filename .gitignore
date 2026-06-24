@@ -67,8 +67,7 @@ skills-example/
 .idea/
 .vscode/
 *.swp
-.cursor/projects/
-.cursor/plans/
+.cursor/
 
 # ========== 系统 ==========
 .DS_Store
