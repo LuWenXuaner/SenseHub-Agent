@@ -72,7 +72,7 @@ class GestureRecognizer:
         FaceLandmarker = mp.tasks.vision.FaceLandmarker
         FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
 
-        face_model_path = "B:/shixun/ai_face/face_landmarker.task"
+        face_model_path = "./face_landmarker.task"
         face_options = FaceLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=face_model_path),
             num_faces=1
