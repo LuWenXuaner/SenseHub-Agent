@@ -1,0 +1,107 @@
+# 复制为 config/models.yaml（开发阶段：硅基流动 + 火山方舟）
+
+defaults:
+  timeout_seconds: 60
+  max_retries: 2
+
+roles:
+  intent:
+    provider: siliconflow
+    model: Qwen/Qwen3-8B
+    temperature: 0.2
+  planner:
+    provider: volcengine
+    model: doubao-1-5-lite-32k-250115
+    temperature: 0.3
+  coder:
+    provider: siliconflow
+    model: Qwen/Qwen3-8B
+    temperature: 0.1
+  vision:
+    provider: siliconflow
+    model: Qwen/Qwen2.5-VL-7B-Instruct
+    temperature: 0.2
+  safety:
+    provider: siliconflow
+    model: Qwen/Qwen3-8B
+    temperature: 0.0
+
+providers:
+  siliconflow:
+    label: 硅基流动
+    base_url_env: SILICONFLOW_BASE_URL
+    api_key_env: SILICONFLOW_API_KEY
+    default_base_url: https://api.siliconflow.cn/v1
+    api_style: openai
+  volcengine:
+    label: 火山方舟
+    base_url_env: VOLCENGINE_BASE_URL
+    api_key_env: VOLCENGINE_API_KEY
+    default_base_url: https://ark.cn-beijing.volces.com/api/v3
+    api_style: openai
+  openai:
+    label: OpenAI
+    base_url_env: OPENAI_BASE_URL
+    api_key_env: OPENAI_API_KEY
+    default_base_url: https://api.openai.com/v1
+    api_style: openai
+  anthropic:
+    label: Anthropic Claude
+    base_url_env: ANTHROPIC_BASE_URL
+    api_key_env: ANTHROPIC_API_KEY
+    default_base_url: https://api.anthropic.com
+    api_style: anthropic
+  deepseek:
+    label: DeepSeek
+    base_url_env: DEEPSEEK_BASE_URL
+    api_key_env: DEEPSEEK_API_KEY
+    default_base_url: https://api.deepseek.com/v1
+    api_style: openai
+  moonshot:
+    label: Kimi · 月之暗面
+    base_url_env: MOONSHOT_BASE_URL
+    api_key_env: MOONSHOT_API_KEY
+    default_base_url: https://api.moonshot.cn/v1
+    api_style: openai
+  mimo:
+    label: Xiaomi MiMo
+    base_url_env: MIMO_BASE_URL
+    api_key_env: MIMO_API_KEY
+    default_base_url: https://api.xiaomimimo.com/v1
+    api_style: openai
+  zhipu:
+    label: 智谱 AI
+    base_url_env: ZHIPU_BASE_URL
+    api_key_env: ZHIPU_API_KEY
+    default_base_url: https://open.bigmodel.cn/api/paas/v4
+    api_style: openai
+  dashscope:
+    label: 通义千问 · 百炼
+    base_url_env: DASHSCOPE_BASE_URL
+    api_key_env: DASHSCOPE_API_KEY
+    default_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_style: openai
+  minimax:
+    label: MiniMax
+    base_url_env: MINIMAX_BASE_URL
+    api_key_env: MINIMAX_API_KEY
+    default_base_url: https://api.minimax.chat/v1
+    api_style: openai
+  groq:
+    label: Groq
+    base_url_env: GROQ_BASE_URL
+    api_key_env: GROQ_API_KEY
+    default_base_url: https://api.groq.com/openai/v1
+    api_style: openai
+  together:
+    label: Together AI
+    base_url_env: TOGETHER_BASE_URL
+    api_key_env: TOGETHER_API_KEY
+    default_base_url: https://api.together.xyz/v1
+    api_style: openai
+
+fallback:
+  - provider: volcengine
+    model: doubao-1-5-lite-32k-250115
+  - provider: siliconflow
+    model: Qwen/Qwen3-8B

@@ -1,0 +1,2076 @@
+@import "./theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-background text-text-primary antialiased;
+  font-family: "Microsoft YaHei", "PingFang SC", "Inter", system-ui, sans-serif;
+}
+
+.card {
+  @apply rounded-xl border border-border bg-surface p-4 shadow-sm;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-lg border border-border bg-surface-elevated px-4 py-2 text-sm font-medium text-text-primary transition hover:border-primary hover:text-primary disabled:opacity-50;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-elevated;
+}
+
+.btn-danger {
+  @apply inline-flex items-center justify-center rounded-lg bg-danger px-3 py-2 text-sm text-white transition hover:opacity-90;
+}
+
+.input {
+  @apply w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary;
+}
+
+.input-icon {
+  @apply input;
+  padding-left: 2.75rem;
+}
+
+.input-icon-wrap {
+  @apply relative;
+}
+
+.input-icon-wrap svg {
+  @apply pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary;
+}
+
+.surface-glass {
+  @apply border border-border bg-surface;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* 登录页 — 居中卡片、统一圆角与交互状态 */
+.auth-theme-toggle {
+  @apply fixed right-4 top-4 z-20 inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-surface text-text-secondary shadow-sm transition;
+}
+
+.auth-theme-toggle:hover {
+  @apply border-primary text-primary;
+}
+
+.auth-theme-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.auth-card {
+  @apply rounded-2xl border border-border p-6 sm:p-8;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--border) 60%, transparent),
+    0 16px 48px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.auth-nebula-wrap {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse farthest-corner at 50% 0%,
+      color-mix(in srgb, var(--primary) 18%, var(--background)),
+      var(--background) 72%
+    );
+}
+
+.auth-nebula-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-nebula-canvas {
+    display: none;
+  }
+}
+
+.auth-tabs {
+  @apply grid grid-cols-2 gap-1 rounded-xl border border-border bg-surface-elevated p-1;
+}
+
+.auth-tab {
+  @apply rounded-lg py-2.5 text-sm font-semibold text-text-secondary transition;
+}
+
+.auth-tab:hover:not(.auth-tab-active) {
+  @apply text-text-primary;
+}
+
+.auth-tab-active {
+  @apply bg-surface text-primary shadow-sm;
+}
+
+.auth-tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.auth-form-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 16.5rem;
+}
+
+.auth-form--login .auth-form-body {
+  gap: 1.25rem;
+}
+
+.auth-form--register .auth-form-body {
+  gap: 0.5rem;
+}
+
+.auth-form--register .auth-field-group {
+  @apply space-y-0.5;
+}
+
+.auth-form--register .auth-field-label {
+  @apply text-xs leading-4;
+}
+
+.auth-form--register .auth-field {
+  @apply py-1.5 pl-9 pr-3 text-sm leading-5;
+}
+
+.auth-form--register .auth-field-icon {
+  @apply left-3;
+}
+
+.auth-form--register .auth-field.pr-14 {
+  @apply pr-10;
+}
+
+.auth-form--register .auth-icon-btn {
+  @apply h-8 w-8;
+}
+
+.auth-form--register .auth-code-btn {
+  min-height: 2rem;
+  min-width: 5.25rem;
+  @apply px-2 text-xs;
+}
+
+.auth-field-group {
+  @apply space-y-1.5;
+}
+
+.auth-field-label {
+  @apply block text-sm font-medium text-text-primary;
+}
+
+.auth-field-wrap {
+  @apply relative;
+}
+
+.auth-field-icon {
+  @apply pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary;
+}
+
+.auth-field {
+  @apply w-full rounded-xl border border-border bg-surface-elevated py-3 pl-11 pr-4 text-sm text-text-primary outline-none transition;
+}
+
+.auth-field:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.auth-field:disabled {
+  @apply cursor-not-allowed opacity-60;
+}
+
+.auth-field-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 15%, transparent);
+}
+
+.auth-icon-btn {
+  @apply absolute right-1 top-1/2 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-lg text-text-secondary transition;
+}
+
+.auth-icon-btn:hover {
+  @apply bg-surface text-text-primary;
+}
+
+.auth-icon-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.auth-checkbox {
+  @apply flex cursor-pointer items-center gap-2 text-sm text-text-secondary;
+}
+
+.auth-checkbox input {
+  @apply h-4 w-4 rounded border-border accent-primary;
+}
+
+.auth-link {
+  @apply text-sm font-medium text-primary transition hover:underline focus-visible:underline;
+}
+
+.auth-hint {
+  @apply rounded-xl px-4 py-2.5 text-sm;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+}
+
+.auth-error {
+  @apply rounded-xl px-4 py-2.5 text-sm;
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  color: var(--danger);
+}
+
+.auth-submit-btn {
+  @apply inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-semibold text-white transition;
+}
+
+.auth-submit-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.auth-submit-btn:disabled {
+  @apply cursor-not-allowed opacity-60;
+}
+
+.auth-submit-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.auth-divider {
+  @apply relative flex items-center py-1;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-divider span {
+  @apply px-4 text-xs font-medium text-text-secondary;
+}
+
+.auth-code-btn {
+  @apply inline-flex min-h-[48px] min-w-[7.5rem] items-center justify-center rounded-xl border border-primary bg-surface px-3 text-xs font-semibold text-primary transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.auth-code-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+}
+
+.auth-code-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.auth-social-btn {
+  @apply flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-transparent px-3 text-sm font-medium text-text-primary transition;
+}
+
+.auth-social-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+.auth-social-btn-active {
+  @apply border-border bg-surface;
+}
+
+.auth-social-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* —— MiMo 风格营销站 —— */
+@keyframes mimo-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes mimo-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.02); }
+}
+
+@keyframes mimo-pulse-ring {
+  0% { transform: scale(0.92); opacity: 0.5; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+  100% { transform: scale(0.92); opacity: 0.5; }
+}
+
+@keyframes mimo-wave {
+  0%, 100% { transform: scaleY(0.45); opacity: 0.45; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes mimo-fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mimo-site {
+  font-family: "PingFang SC", "MiSans", "Microsoft YaHei", "Helvetica Neue", system-ui, sans-serif;
+  background: var(--mimo-bg);
+}
+
+.mimo-container {
+  @apply mx-auto w-full max-w-mimo px-5 md:px-8;
+}
+
+.mimo-logo {
+  @apply text-xl font-semibold tracking-tight text-mimo-text;
+  letter-spacing: -0.02em;
+}
+
+.mimo-nav-link {
+  @apply text-sm text-mimo-muted transition-colors duration-200;
+}
+
+.mimo-nav-link:hover {
+  color: var(--mimo-text);
+}
+
+.mimo-nav-link-active {
+  @apply font-medium;
+  color: var(--mimo-text);
+}
+
+.mimo-icon-btn {
+  @apply inline-flex h-9 w-9 items-center justify-center rounded-full text-mimo-muted transition;
+}
+
+.mimo-icon-btn:hover {
+  background: var(--mimo-warm);
+  color: var(--mimo-text);
+}
+
+.mimo-btn-primary {
+  @apply inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition;
+  background: var(--mimo-cta);
+  color: #ffffff;
+}
+
+.dark .mimo-btn-primary {
+  color: #1a1a1a;
+}
+
+.mimo-btn-primary:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.mimo-btn-outline {
+  @apply inline-flex items-center justify-center rounded-full border bg-transparent px-5 py-2.5 text-sm font-medium transition;
+  border-color: var(--mimo-border);
+  color: var(--mimo-text);
+}
+
+.mimo-btn-outline:hover {
+  background: var(--mimo-warm);
+}
+
+.mimo-btn-ghost {
+  @apply inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition;
+  color: var(--mimo-link);
+}
+
+.mimo-btn-ghost:hover {
+  background: color-mix(in srgb, var(--mimo-accent) 8%, var(--mimo-bg));
+}
+
+.mimo-section {
+  @apply py-16 md:py-24;
+}
+
+.mimo-section-title {
+  @apply text-center text-2xl font-semibold tracking-tight md:text-[2rem];
+  color: var(--mimo-text);
+  letter-spacing: -0.02em;
+}
+
+.mimo-section-sub {
+  @apply mx-auto mt-4 max-w-2xl text-center text-sm leading-7 md:text-base;
+  color: var(--mimo-muted);
+}
+
+.mimo-link-more {
+  @apply text-sm font-medium transition hover:underline;
+  color: var(--mimo-accent);
+}
+
+.mimo-footer-title {
+  @apply text-sm font-semibold;
+  color: var(--mimo-text);
+}
+
+/* 顶栏公告滚动 */
+.mimo-announce-bar {
+  overflow: hidden;
+  border-bottom: 1px solid color-mix(in srgb, var(--mimo-accent) 25%, var(--mimo-border));
+  background: color-mix(in srgb, var(--mimo-accent) 12%, var(--mimo-bg));
+  padding: 0.5rem 0;
+}
+
+.mimo-announce-track {
+  display: flex;
+  width: max-content;
+  animation: mimo-marquee 32s linear infinite;
+}
+
+.mimo-announce-item {
+  flex-shrink: 0;
+  padding: 0 2rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  color: var(--mimo-muted);
+}
+
+.mimo-announce-link {
+  margin-left: 0.75rem;
+  font-weight: 500;
+  color: var(--mimo-accent);
+}
+
+.mimo-announce-link:hover {
+  text-decoration: underline;
+}
+
+/* Header */
+.mimo-header {
+  border-bottom: 1px solid var(--mimo-border);
+  background: color-mix(in srgb, var(--mimo-bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.mimo-header-inner {
+  @apply relative flex h-[4.25rem] items-center justify-between;
+}
+
+.mimo-header-nav {
+  @apply hidden items-center gap-10 lg:flex;
+}
+
+/* Hero */
+.mimo-hero {
+  @apply relative overflow-hidden py-24 text-center md:py-32;
+  background: linear-gradient(180deg, var(--mimo-warm) 0%, var(--mimo-bg) 55%, var(--mimo-bg) 100%);
+}
+
+.mimo-hero-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  animation: mimo-float 8s ease-in-out infinite;
+}
+
+.mimo-hero-glow-a {
+  width: 420px;
+  height: 420px;
+  top: -120px;
+  left: 15%;
+  background: color-mix(in srgb, var(--mimo-accent) 22%, transparent);
+}
+
+.mimo-hero-glow-b {
+  width: 360px;
+  height: 360px;
+  top: 40px;
+  right: 10%;
+  background: color-mix(in srgb, #ffc800 18%, transparent);
+  animation-delay: -3s;
+}
+
+.mimo-hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--mimo-border) 40%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--mimo-border) 40%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent);
+  opacity: 0.35;
+}
+
+.mimo-brand-mark {
+  font-size: clamp(3.5rem, 12vw, 7rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--mimo-text);
+  animation: mimo-fade-up 0.8s ease-out;
+}
+
+.mimo-hero-title {
+  @apply mx-auto mt-6 max-w-2xl text-xl font-normal leading-relaxed md:text-2xl;
+  color: var(--mimo-muted);
+  animation: mimo-fade-up 0.8s ease-out 0.15s both;
+}
+
+.mimo-hero-wave {
+  @apply mt-10 flex items-end justify-center gap-1;
+  height: 28px;
+}
+
+.mimo-hero-wave span {
+  display: block;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--mimo-accent);
+  animation: mimo-wave 1.2s ease-in-out infinite;
+}
+
+.mimo-hero-wave span:nth-child(2) { animation-delay: 0.15s; height: 20px; }
+.mimo-hero-wave span:nth-child(3) { animation-delay: 0.3s; height: 14px; }
+
+/* Carousel */
+.mimo-carousel-wrap {
+  @apply relative;
+}
+
+.mimo-carousel-track {
+  @apply flex items-stretch gap-4 overflow-x-auto pb-2;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mimo-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.mimo-carousel-btn {
+  @apply absolute top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border transition md:flex;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+  color: var(--mimo-text);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--mimo-text) 8%, transparent);
+}
+
+.mimo-carousel-btn:hover {
+  border-color: var(--mimo-accent);
+  color: var(--mimo-accent);
+}
+
+.mimo-carousel-btn-left { left: -0.5rem; }
+.mimo-carousel-btn-right { right: -0.5rem; }
+
+/* Cards */
+.mimo-hover-lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.mimo-hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--mimo-text) 8%, transparent);
+}
+
+.mimo-news-card {
+  @apply flex min-h-[248px] w-full flex-col rounded-2xl border p-6;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+  border-top: 3px solid transparent;
+}
+
+.mimo-news-card:hover {
+  border-color: color-mix(in srgb, var(--mimo-accent) 35%, var(--mimo-border));
+  border-top-color: var(--mimo-accent);
+}
+
+.mimo-model-card {
+  @apply relative overflow-hidden rounded-2xl border p-6 md:min-w-[300px];
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  min-width: 280px;
+  max-width: 340px;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+}
+
+.mimo-model-card-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--mimo-accent), #ffc800);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.mimo-model-card:hover .mimo-model-card-accent {
+  opacity: 1;
+}
+
+.mimo-price-list {
+  @apply mt-5 space-y-2 border-t pt-4;
+  border-color: var(--mimo-border);
+}
+
+.mimo-price-row {
+  @apply flex items-start justify-between gap-3 text-xs;
+}
+
+.mimo-price-row dt {
+  color: var(--mimo-muted);
+}
+
+.mimo-price-row dd {
+  text-align: right;
+  font-weight: 500;
+  color: var(--mimo-text);
+}
+
+.mimo-price-accent {
+  color: var(--mimo-accent) !important;
+  font-weight: 600;
+}
+
+.mimo-product-card {
+  @apply flex h-full min-w-[280px] flex-col rounded-2xl border md:min-w-[300px];
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+  overflow: hidden;
+}
+
+.mimo-product-visual {
+  @apply relative flex h-40 items-center justify-center overflow-hidden;
+}
+
+.mimo-product-orbit {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--mimo-accent) 35%, transparent);
+  animation: mimo-pulse-ring 3s ease-in-out infinite;
+}
+
+.mimo-eco-pill {
+  @apply rounded-xl border px-5 py-3 text-sm transition;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+  color: var(--mimo-muted);
+}
+
+.mimo-eco-pill:hover {
+  border-color: var(--mimo-accent);
+  color: var(--mimo-accent);
+  transform: translateY(-2px);
+}
+
+.mimo-voice-card {
+  @apply min-w-[300px] max-w-[360px] rounded-2xl border p-6 md:min-w-[320px];
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+}
+
+.mimo-about-lead {
+  @apply mt-6 text-base leading-8 md:text-lg;
+  color: var(--mimo-text);
+}
+
+.mimo-about-body {
+  @apply mt-4 text-sm leading-8 md:text-base;
+  color: var(--mimo-muted);
+}
+
+.mimo-in-view .mimo-section-title,
+.mimo-in-view .mimo-about-lead,
+.mimo-in-view .mimo-about-body {
+  animation: mimo-fade-up 0.7s ease-out both;
+}
+
+.mimo-in-view .mimo-about-body {
+  animation-delay: 0.12s;
+}
+
+/* 滚动进入视口：子元素依次浮现 */
+.mimo-reveal-stagger .mimo-reveal-item,
+.mimo-in-view .mimo-news-card,
+.mimo-in-view .mimo-reveal-item {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item,
+.mimo-in-view .mimo-news-card {
+  animation: mimo-fade-up 0.65s ease-out forwards;
+}
+
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(1),
+.mimo-in-view .mimo-news-grid .mimo-news-card:nth-child(1) { animation-delay: 0.05s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(2),
+.mimo-in-view .mimo-news-grid .mimo-news-card:nth-child(2) { animation-delay: 0.1s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(3),
+.mimo-in-view .mimo-news-grid .mimo-news-card:nth-child(3) { animation-delay: 0.15s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(4) { animation-delay: 0.2s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(5) { animation-delay: 0.25s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(6) { animation-delay: 0.3s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(7) { animation-delay: 0.35s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(8) { animation-delay: 0.4s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(9) { animation-delay: 0.45s; }
+.mimo-in-view.mimo-reveal-stagger .mimo-reveal-item:nth-child(10) { animation-delay: 0.5s; }
+
+.mimo-in-view .mimo-section-title-left,
+.mimo-in-view .mimo-link-more,
+.mimo-in-view .mimo-product-matrix .mimo-matrix-card,
+.mimo-in-view .mimo-flagship-card {
+  opacity: 0;
+  animation: mimo-fade-up 0.7s ease-out forwards;
+}
+
+.mimo-in-view .mimo-product-matrix .mimo-matrix-card:nth-child(1) { animation-delay: 0.06s; }
+.mimo-in-view .mimo-product-matrix .mimo-matrix-card:nth-child(2) { animation-delay: 0.12s; }
+.mimo-in-view .mimo-product-matrix .mimo-matrix-card:nth-child(3) { animation-delay: 0.18s; }
+.mimo-in-view .mimo-product-matrix .mimo-matrix-card:nth-child(4) { animation-delay: 0.24s; }
+
+.mimo-eco-icon-wrap {
+  @apply relative inline-flex h-10 w-10 shrink-0 items-center justify-center;
+}
+
+.mimo-eco-icon-overlay {
+  @apply absolute inset-0 m-auto;
+}
+
+.mimo-page-hero {
+  @apply border-b py-14 text-left md:py-20;
+  border-color: var(--mimo-border);
+  background: linear-gradient(180deg, var(--mimo-warm), var(--mimo-bg));
+}
+
+.mimo-page-title {
+  @apply text-3xl font-semibold tracking-tight md:text-4xl;
+  color: var(--mimo-text);
+  letter-spacing: -0.02em;
+}
+
+/* Hero 左右分栏（对齐 MiMo 首页） */
+.mimo-hero-split {
+  background: linear-gradient(135deg, #faf7f5 0%, #ffffff 45%, #fff8f3 100%);
+  border-bottom: 1px solid var(--mimo-border);
+}
+
+.mimo-hero-copy {
+  animation: mimo-fade-up 0.7s ease-out;
+}
+
+.mimo-hero-brand {
+  font-size: clamp(4rem, 14vw, 7.5rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: #000000;
+}
+
+.dark .mimo-hero-brand {
+  color: #f5f5f5;
+}
+
+.mimo-hero-tagline {
+  @apply mt-6 max-w-md text-lg leading-relaxed md:text-xl;
+  color: var(--mimo-muted);
+  font-weight: 400;
+}
+
+.mimo-globe-wrap {
+  @apply relative mx-auto w-full;
+  height: min(72vh, 520px);
+  min-height: 360px;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 105, 0, 0.05) 0%, transparent 55%);
+}
+
+.mimo-hero-visual-box {
+  @apply relative h-full w-full;
+  min-height: 360px;
+}
+
+.mimo-hero-visual-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mimo-hero-visual-col {
+  @apply flex h-full min-h-[360px] items-center justify-center;
+}
+
+.mimo-section-title-left {
+  @apply text-2xl font-semibold tracking-tight md:text-[2rem];
+  color: var(--mimo-text);
+  letter-spacing: -0.02em;
+  text-align: left;
+}
+
+/* 旗舰模型卡 */
+.mimo-flagship-card {
+  @apply flex h-full w-[280px] flex-col overflow-hidden rounded-2xl border;
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  min-height: 440px;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+}
+
+.mimo-flagship-art {
+  @apply h-[140px] w-full shrink-0 overflow-hidden;
+  background: linear-gradient(180deg, #f0f0f0 0%, #f8f8f8 100%);
+}
+
+.mimo-flagship-body {
+  @apply flex min-h-[148px] flex-1 flex-col p-5;
+}
+
+.mimo-flagship-name {
+  @apply text-base font-semibold;
+  color: var(--mimo-text);
+}
+
+.mimo-flagship-desc {
+  @apply mt-2 line-clamp-4 text-xs leading-6;
+  color: var(--mimo-muted);
+}
+
+.mimo-flagship-pricing {
+  @apply mt-auto shrink-0 border-t px-5 py-4;
+  border-color: var(--mimo-border);
+  background: color-mix(in srgb, var(--mimo-warm) 60%, var(--mimo-surface));
+}
+
+/* 产品矩阵 */
+.mimo-product-matrix {
+  @apply mt-10 grid items-stretch gap-4;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 1fr;
+}
+
+@media (max-width: 1024px) {
+  .mimo-product-matrix {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .mimo-product-matrix {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mimo-matrix-card {
+  @apply flex h-full min-h-[300px] flex-col rounded-2xl border bg-white p-6 shadow-sm;
+  border-color: var(--mimo-border);
+}
+
+.mimo-matrix-title {
+  @apply text-lg font-semibold;
+  color: var(--mimo-text);
+}
+
+.mimo-matrix-desc {
+  @apply mt-3 line-clamp-5 flex-1 text-sm leading-7;
+  color: var(--mimo-muted);
+}
+
+.mimo-matrix-cta-outline {
+  @apply inline-flex w-fit items-center rounded-lg border px-4 py-2 text-sm font-medium transition;
+  border-color: var(--mimo-text);
+  color: var(--mimo-text);
+}
+
+.mimo-matrix-cta-outline:hover {
+  background: color-mix(in srgb, var(--mimo-accent) 10%, var(--mimo-warm));
+  border-color: var(--mimo-accent);
+  color: var(--mimo-accent);
+}
+
+.mimo-matrix-cta {
+  @apply mimo-matrix-cta-outline;
+  background: var(--mimo-text);
+  color: #fff;
+}
+
+.dark .mimo-matrix-cta {
+  background: #f5f5f5;
+  color: #000;
+}
+
+/* 生态网格 */
+.mimo-eco-grid {
+  @apply mt-10 grid gap-3;
+  grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 900px) {
+  .mimo-eco-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .mimo-eco-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.mimo-eco-card {
+  @apply flex h-[52px] items-center gap-3 rounded-xl border px-4;
+  border-color: var(--mimo-border);
+  background: #f7f7f7;
+}
+
+.mimo-eco-icon-img {
+  @apply h-8 w-8 shrink-0 rounded-md object-contain;
+  background: #fff;
+  padding: 2px;
+}
+
+.mimo-eco-icon-local {
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white;
+  background: var(--mimo-accent);
+}
+
+.mimo-eco-icon-fallback {
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[10px] font-bold text-white;
+  background: #1a1a1a;
+}
+
+.mimo-eco-name {
+  @apply text-sm font-medium;
+  color: var(--mimo-text);
+}
+
+/* 开发者声音脑图 */
+.mimo-voice-graph-wrap {
+  @apply mt-6 overflow-x-auto;
+}
+
+/* 开发者声音 — 动态分散词云 */
+.mimo-voice-cloud {
+  position: relative;
+  margin-top: 2rem;
+  min-height: 420px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #faf7f5 0%, #ffffff 100%);
+  border: 1px solid var(--mimo-border);
+}
+
+.mimo-voice-cloud-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.mimo-voice-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mimo-text);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  border: 1px solid var(--mimo-border);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  animation: mimo-hub-pulse 3s ease-in-out infinite;
+}
+
+@keyframes mimo-hub-pulse {
+  0%, 100% { box-shadow: 0 4px 24px rgba(255, 105, 0, 0.08); }
+  50% { box-shadow: 0 4px 32px rgba(255, 105, 0, 0.18); }
+}
+
+.mimo-voice-tag {
+  position: absolute;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  animation: mimo-voice-drift var(--dur, 5s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes mimo-voice-drift {
+  0%, 100% { transform: translate(-50%, -50%) translate(0, 0); }
+  50% { transform: translate(-50%, -50%) translate(var(--dx, 4px), var(--dy, -4px)); }
+}
+
+.mimo-voice-tag-tier-1 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--mimo-text);
+}
+
+.mimo-voice-tag-tier-2 {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--mimo-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mimo-voice-tag,
+  .mimo-voice-hub {
+    animation: none !important;
+  }
+}
+
+.mimo-voice-graph {
+  @apply mx-auto w-full;
+  min-width: 640px;
+  max-width: 900px;
+  height: auto;
+}
+
+.mimo-voice-center {
+  font-size: 16px;
+  font-weight: 600;
+  fill: #1a1a1a;
+}
+
+.mimo-voice-primary {
+  font-size: 15px;
+  font-weight: 600;
+  fill: #1a1a1a;
+}
+
+.mimo-voice-child {
+  font-size: 12px;
+  fill: #777777;
+}
+
+.dark .mimo-voice-center,
+.dark .mimo-voice-primary {
+  fill: #f5f5f5;
+}
+
+.dark .mimo-voice-child {
+  fill: #888;
+}
+
+.mimo-btn-cta {
+  @apply inline-flex items-center rounded-lg px-4 py-2 text-sm font-medium text-white transition;
+  background: #000000;
+}
+
+.mimo-btn-cta:hover {
+  opacity: 0.85;
+}
+
+.dark .mimo-btn-cta {
+  background: #f5f5f5;
+  color: #000000;
+}
+
+.mimo-btn-text {
+  font-weight: 500;
+  color: var(--mimo-accent);
+}
+
+.mimo-btn-text:hover {
+  text-decoration: underline;
+}
+
+/* API 提供商 Bento */
+.mimo-api-bento {
+  @apply mt-10 grid gap-3;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: minmax(120px, auto);
+}
+
+.mimo-api-tile {
+  @apply flex flex-col rounded-2xl border p-5;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+  color: inherit;
+}
+
+.mimo-api-tile-sm {
+  grid-column: span 2;
+}
+
+.mimo-api-tile-md {
+  grid-column: span 3;
+}
+
+.mimo-api-tile-lg {
+  grid-column: span 3;
+  grid-row: span 2;
+}
+
+@media (max-width: 768px) {
+  .mimo-api-tile-sm,
+  .mimo-api-tile-md,
+  .mimo-api-tile-lg {
+    grid-column: span 6;
+    grid-row: span 1;
+  }
+}
+
+.mimo-api-provider {
+  @apply text-xs font-medium;
+  color: var(--mimo-muted);
+}
+
+.mimo-api-badge {
+  @apply rounded-full px-2 py-0.5 text-[10px] font-medium;
+  background: color-mix(in srgb, var(--mimo-accent) 12%, var(--mimo-bg));
+  color: var(--mimo-accent);
+}
+
+.mimo-api-model {
+  @apply mt-2 text-xl font-semibold tracking-tight;
+  color: var(--mimo-text);
+}
+
+.mimo-api-desc {
+  @apply mt-2 flex-1 text-sm leading-6;
+  color: var(--mimo-muted);
+}
+
+.mimo-api-role {
+  @apply mt-3 font-mono text-xs;
+  color: var(--mimo-link);
+}
+
+/* 黑底页脚 */
+.mimo-footer-dark {
+  background: var(--mimo-footer-bg);
+  color: #f5f5f5;
+}
+
+.mimo-footer-dark-title {
+  @apply text-sm font-semibold text-white;
+}
+
+.mimo-footer-dark-links {
+  @apply mt-4 space-y-2.5 text-sm;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.mimo-footer-dark-links a:hover {
+  color: #ffffff;
+}
+
+.mimo-footer-dark-bar {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mimo-qr-block {
+  @apply flex flex-col items-center;
+}
+
+.mimo-qr-placeholder {
+  @apply overflow-hidden rounded-lg border p-2;
+  width: 112px;
+  height: 112px;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: #ffffff;
+}
+
+.mimo-qr-label {
+  @apply mt-3 text-xs;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.mimo-btn-cta-open {
+  opacity: 0.92;
+}
+
+.mimo-use-dropdown {
+  @apply w-56 rounded-xl border py-2 shadow-lg;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-use-dropdown-bridge {
+  @apply absolute right-0 top-full z-50 pt-2;
+}
+
+.mimo-use-dropdown-heading {
+  @apply px-4 py-2 text-xs;
+  color: var(--mimo-muted);
+}
+
+.mimo-use-dropdown-item {
+  @apply flex items-center justify-between px-4 py-2.5 text-sm transition;
+  color: var(--mimo-text);
+}
+
+.mimo-use-dropdown-item:hover {
+  background: var(--mimo-warm);
+}
+
+.mimo-use-dropdown-divider {
+  @apply my-1 h-px;
+  background: var(--mimo-border);
+}
+
+.mimo-news-grid {
+  @apply grid gap-4;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1024px) {
+  .mimo-news-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .mimo-news-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mimo-card-static {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mimo-card-static:hover {
+  transform: none;
+}
+
+.mimo-carousel-controls-bottom {
+  @apply mt-4 flex justify-center gap-3;
+}
+
+.mimo-carousel-btn-bottom {
+  @apply inline-flex h-9 w-9 items-center justify-center rounded-full border transition;
+  border-color: var(--mimo-border);
+  background: var(--mimo-surface);
+  color: var(--mimo-text);
+}
+
+.mimo-carousel-btn-bottom:hover {
+  border-color: var(--mimo-accent);
+  color: var(--mimo-accent);
+}
+
+.mimo-api-badge {
+  @apply rounded px-1.5 py-0.5 text-[10px] font-medium;
+  background: color-mix(in srgb, var(--mimo-accent) 12%, transparent);
+  color: var(--mimo-accent);
+}
+
+.mimo-product-app {
+  color: var(--mimo-text);
+}
+
+.mimo-console-announce {
+  @apply shrink-0 px-4 py-2 text-center text-xs text-white;
+  background: #000000;
+}
+
+.mimo-console-header {
+  @apply flex h-14 shrink-0 items-center justify-between border-b px-4 md:px-6;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-console-logo {
+  @apply text-base font-semibold;
+  color: var(--mimo-text);
+}
+
+.mimo-console-divider {
+  @apply h-4 w-px;
+  background: var(--mimo-border);
+}
+
+.mimo-console-sidebar {
+  @apply flex w-[220px] shrink-0 flex-col border-r;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-console-nav-heading {
+  @apply px-3 text-xs;
+  color: var(--mimo-muted);
+}
+
+.mimo-console-nav-item {
+  @apply relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition;
+  color: var(--mimo-text);
+}
+
+.mimo-console-nav-item:hover {
+  background: var(--mimo-warm);
+}
+
+.mimo-console-nav-item-active {
+  background: #f5efe8;
+  font-weight: 500;
+}
+
+.mimo-console-nav-item-active::before {
+  content: "";
+  @apply absolute left-0 h-6 w-0.5 rounded-r;
+  background: var(--mimo-accent);
+}
+
+.mimo-console-promo {
+  @apply rounded-xl border p-3 text-center;
+  border-color: var(--mimo-border);
+  background: #faf7f5;
+}
+
+.mimo-console-invite-btn {
+  @apply w-full rounded-lg py-2.5 text-sm font-medium text-white transition;
+  background: #000000;
+}
+
+.mimo-console-invite-btn:hover {
+  opacity: 0.9;
+}
+
+.mimo-console-main {
+  background: #f7f7f7;
+}
+
+.mimo-studio-subscribe-bar {
+  @apply flex shrink-0 items-center justify-center gap-2 border-b py-2 text-xs;
+  border-color: var(--mimo-border);
+  background: #faf7f5;
+  color: var(--mimo-muted);
+}
+
+.mimo-studio-sidebar {
+  @apply flex w-[220px] shrink-0 flex-col border-r;
+  border-color: var(--mimo-border);
+  background: #fafafa;
+}
+
+.mimo-studio-header {
+  @apply flex h-14 shrink-0 items-center border-b px-4 md:px-6;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-studio-model-btn {
+  @apply inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-studio-model-btn:hover {
+  border-color: color-mix(in srgb, var(--mimo-accent) 40%, var(--mimo-border));
+}
+
+.mimo-studio-badge-new {
+  @apply rounded px-1.5 py-0.5 text-[10px] font-medium;
+  background: #e8f3ff;
+  color: #1677ff;
+}
+
+.mimo-studio-model-menu {
+  @apply absolute left-0 top-[calc(100%+6px)] z-50 w-80 overflow-hidden rounded-xl border py-1 shadow-lg;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-studio-model-option {
+  @apply flex w-full items-start gap-3 px-4 py-3 text-left text-sm transition;
+}
+
+.mimo-studio-model-option:hover {
+  background: var(--mimo-warm);
+}
+
+.mimo-studio-model-option-active {
+  background: color-mix(in srgb, var(--mimo-warm) 80%, #ffffff);
+}
+
+.mimo-studio-api-link {
+  @apply inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition;
+  border-color: var(--mimo-border);
+  color: var(--mimo-text);
+}
+
+.mimo-studio-api-link:hover {
+  background: var(--mimo-warm);
+}
+
+.mimo-studio-nav-item {
+  @apply flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition;
+  color: var(--mimo-text);
+}
+
+.mimo-studio-nav-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mimo-studio-nav-item-active {
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 500;
+}
+
+.mimo-studio-main {
+  background: #ffffff;
+}
+
+.mimo-studio-prompt-card {
+  @apply rounded-xl border px-4 py-3 text-sm leading-6 transition;
+  border-color: var(--mimo-border);
+  background: #f5f5f5;
+  color: var(--mimo-muted);
+}
+
+.mimo-studio-prompt-card:hover {
+  border-color: color-mix(in srgb, var(--mimo-accent) 35%, var(--mimo-border));
+  color: var(--mimo-text);
+}
+
+.mimo-studio-input-wrap {
+  @apply relative flex items-center rounded-2xl border;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-studio-input {
+  @apply min-h-[48px] w-full resize-none bg-transparent px-4 py-3 pr-10 text-sm outline-none;
+}
+
+.mimo-studio-input-addon {
+  @apply absolute right-2 inline-flex h-8 w-8 items-center justify-center rounded-lg text-mimo-muted transition;
+}
+
+.mimo-studio-input-addon:hover {
+  background: var(--mimo-warm);
+  color: var(--mimo-text);
+}
+
+.mimo-studio-send-btn {
+  @apply inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition disabled:opacity-40;
+  background: #000000;
+}
+
+.mimo-lang-menu {
+  @apply absolute right-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-xl border py-1 shadow-lg;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-lang-option {
+  @apply block w-full px-4 py-2.5 text-left text-sm transition;
+  color: var(--mimo-text);
+}
+
+.mimo-lang-option:hover,
+.mimo-lang-option-active {
+  background: var(--mimo-warm);
+}
+
+.mimo-console-page {
+  @apply h-full overflow-y-auto p-6 md:p-10;
+}
+
+.mimo-console-page-head {
+  @apply mb-8 flex flex-wrap items-start justify-between gap-4;
+}
+
+.mimo-console-page-title {
+  @apply text-2xl font-semibold tracking-tight md:text-3xl;
+  color: var(--mimo-text);
+}
+
+.mimo-console-page-sub {
+  @apply mt-2 text-sm;
+  color: var(--mimo-muted);
+}
+
+.mimo-console-account-card,
+.mimo-console-panel {
+  @apply rounded-2xl border p-6 md:p-8;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-console-account-card {
+  @apply mx-auto max-w-lg;
+  background: linear-gradient(180deg, #faf7f5 0%, #ffffff 100%);
+}
+
+.mimo-console-kv {
+  @apply space-y-4 text-sm;
+}
+
+.mimo-console-kv div {
+  @apply flex justify-between gap-4 pb-3;
+  border-bottom: 1px solid color-mix(in srgb, var(--mimo-border) 60%, transparent);
+}
+
+.mimo-console-kv dt {
+  color: var(--mimo-muted);
+}
+
+.mimo-console-kv dd {
+  @apply font-medium;
+  color: var(--mimo-text);
+}
+
+.mimo-console-primary-btn {
+  @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition;
+  background: #000000;
+}
+
+.mimo-btn-block {
+  @apply flex w-full;
+}
+
+.mimo-btn-sm {
+  @apply px-3 py-1.5 text-sm;
+}
+
+.mimo-console-outline-btn {
+  @apply inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+  color: var(--mimo-text);
+}
+
+.mimo-console-field-label {
+  @apply mb-1 block text-xs;
+  color: var(--mimo-muted);
+}
+
+.mimo-console-input {
+  @apply w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-mimo-accent;
+  border-color: var(--mimo-border);
+}
+
+.mimo-console-input-compact {
+  @apply py-1.5 text-xs;
+}
+
+.mimo-console-provider-card {
+  @apply rounded-xl border p-3.5;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.dark .mimo-console-provider-card {
+  background: var(--mimo-surface);
+}
+
+.mimo-console-plan-card {
+  @apply rounded-2xl border p-6;
+  border-color: var(--mimo-border);
+  background: linear-gradient(135deg, #faf0e6 0%, #ffffff 70%);
+}
+
+.mimo-console-tag {
+  @apply rounded px-2 py-0.5 text-xs;
+  background: #f0f0f0;
+  color: var(--mimo-muted);
+}
+
+.mimo-console-plugins-embed .card {
+  @apply rounded-xl border border-mimo-border bg-white;
+}
+
+.mimo-studio-sidebar-collapsed {
+  @apply w-12 items-center justify-start p-2;
+}
+
+.mimo-studio-sidebar-toggle {
+  @apply rounded-lg p-2 text-mimo-muted transition hover:bg-black/5 hover:text-mimo-text;
+}
+
+/* 文档中心 */
+.mimo-docs-app {
+  color: var(--mimo-text);
+}
+
+.mimo-docs-header {
+  @apply sticky top-0 z-40 border-b border-mimo-border bg-white;
+}
+
+.mimo-docs-logo {
+  @apply text-base font-semibold;
+}
+
+.mimo-docs-tab {
+  @apply border-b-2 border-transparent pb-1 font-medium text-mimo-text;
+}
+
+.mimo-docs-tab.active,
+a.mimo-docs-tab.router-link-active {
+  border-color: var(--mimo-text);
+}
+
+.mimo-docs-tab-link {
+  @apply text-mimo-muted transition hover:text-mimo-text;
+}
+
+.mimo-docs-search {
+  @apply relative;
+}
+
+.mimo-docs-search-input {
+  @apply w-full rounded-lg border px-3 py-2 pr-14 text-sm outline-none;
+  border-color: var(--mimo-border);
+}
+
+.mimo-docs-kbd {
+  @apply absolute right-2 top-1/2 -translate-y-1/2 rounded border px-1.5 py-0.5 text-[10px];
+  border-color: var(--mimo-border);
+  color: var(--mimo-muted);
+}
+
+.mimo-docs-nav-heading {
+  @apply px-2 text-xs font-medium;
+  color: var(--mimo-muted);
+}
+
+.mimo-docs-nav-item {
+  @apply block rounded-lg px-2 py-1.5 text-sm transition;
+  color: var(--mimo-text);
+}
+
+.mimo-docs-nav-item:hover {
+  background: var(--mimo-warm);
+}
+
+.mimo-docs-main {
+  @apply mx-auto max-w-5xl p-6 md:p-10;
+}
+
+.mimo-docs-hero {
+  @apply relative overflow-hidden rounded-2xl border p-8 md:p-10;
+  border-color: var(--mimo-border);
+  background: linear-gradient(135deg, #f3f3f3 0%, #fafafa 50%, #fff8f3 100%);
+  min-height: 220px;
+}
+
+.mimo-docs-hero-art {
+  @apply absolute right-8 top-1/2 hidden h-32 w-32 -translate-y-1/2 rounded-full md:block;
+  background: radial-gradient(circle, rgba(255, 105, 0, 0.15) 0%, transparent 70%);
+}
+
+.mimo-docs-hero-dots {
+  @apply absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2;
+}
+
+.mimo-docs-dot {
+  @apply h-1.5 w-1.5 rounded-full bg-mimo-border;
+}
+
+.mimo-docs-dot-active {
+  @apply w-4 bg-mimo-text;
+}
+
+.mimo-docs-section-title {
+  @apply text-xl font-semibold;
+}
+
+.mimo-docs-quick-grid {
+  @apply mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3;
+}
+
+.mimo-docs-quick-card {
+  @apply rounded-2xl border p-6 transition;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+  color: inherit;
+}
+
+.mimo-docs-quick-card:hover {
+  border-color: color-mix(in srgb, var(--mimo-accent) 35%, var(--mimo-border));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--mimo-text) 6%, transparent);
+}
+
+/* 控制台 — 个人中心 / 财务 */
+.mimo-console-page-centered .mimo-console-page-title {
+  @apply text-3xl md:text-4xl;
+}
+
+.mimo-console-page-body-centered {
+  @apply flex justify-center;
+}
+
+.mimo-account-card {
+  @apply w-full max-w-lg rounded-2xl border p-8 md:p-10;
+  border-color: var(--mimo-border);
+  background: linear-gradient(180deg, #faf7f5 0%, #ffffff 100%);
+}
+
+.mimo-account-rows {
+  @apply space-y-0 text-sm;
+}
+
+.mimo-account-row {
+  @apply flex items-start justify-between gap-4 border-b py-4;
+  border-color: color-mix(in srgb, var(--mimo-border) 70%, transparent);
+}
+
+.mimo-account-row dt {
+  @apply shrink-0 text-mimo-muted;
+}
+
+.mimo-account-row dd {
+  @apply text-right font-medium;
+}
+
+.mimo-account-row-stack dd {
+  @apply font-normal;
+}
+
+.mimo-account-actions {
+  @apply mt-8 space-y-3;
+}
+
+.mimo-balance-summary-card {
+  @apply rounded-2xl border p-6;
+  border-color: var(--mimo-border);
+  background: linear-gradient(180deg, #faf7f5 0%, #ffffff 100%);
+}
+
+.mimo-console-stat-card {
+  @apply rounded-2xl border p-4;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-recharge-chip {
+  @apply rounded-lg border px-3 py-2 text-sm transition;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-recharge-chip-active {
+  border-color: var(--mimo-text);
+  background: #faf7f5;
+}
+
+.mimo-pay-method {
+  @apply rounded-lg border px-4 py-2 text-sm transition;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-pay-method-active {
+  border-color: var(--mimo-text);
+  background: #faf7f5;
+}
+
+.mimo-console-tab {
+  @apply border-b-2 border-transparent pb-3 text-sm text-mimo-muted transition;
+}
+
+.mimo-console-tab-active {
+  border-color: var(--mimo-text);
+  color: var(--mimo-text);
+  font-weight: 500;
+}
+
+.mimo-console-info-banner {
+  @apply rounded-lg border px-4 py-3 text-sm;
+  border-color: #ffe7ba;
+  background: #fffbe6;
+  color: #8c6d1f;
+}
+
+.mimo-console-empty {
+  @apply flex flex-col items-center justify-center py-12 text-center;
+}
+
+.mimo-console-table th {
+  @apply border-b px-4 py-3 text-xs font-medium text-mimo-muted;
+  border-color: var(--mimo-border);
+}
+
+.mimo-console-table td {
+  @apply border-b px-4 py-3;
+  border-color: color-mix(in srgb, var(--mimo-border) 60%, transparent);
+}
+
+.mimo-status-ok {
+  @apply inline-flex items-center gap-1.5 text-sm;
+  color: #389e0d;
+}
+
+.mimo-status-dot {
+  @apply inline-block h-1.5 w-1.5 rounded-full;
+  background: #52c41a;
+}
+
+.mimo-console-tag-active {
+  background: #e6f7e6;
+  color: #389e0d;
+}
+
+.mimo-modal-overlay {
+  @apply fixed inset-0 z-[100] flex items-center justify-center p-4;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.mimo-invite-modal {
+  @apply relative w-full max-w-md rounded-2xl border p-8 shadow-xl;
+  border-color: var(--mimo-border);
+  background: linear-gradient(180deg, #faf7f5 0%, #ffffff 100%);
+}
+
+.mimo-modal-close {
+  @apply absolute right-4 top-4 rounded-lg p-1 text-mimo-muted transition hover:bg-black/5;
+}
+
+.mimo-invite-badge {
+  @apply mr-2 inline-block rounded px-2 py-1 text-xs font-medium;
+}
+
+.mimo-invite-badge-dark {
+  background: #000;
+  color: #fff;
+}
+
+.mimo-invite-badge-light {
+  background: #faf7f5;
+  color: var(--mimo-text);
+  border: 1px solid var(--mimo-border);
+}
+
+.mimo-claw-header {
+  @apply flex h-12 shrink-0 items-center border-b px-4 md:px-6;
+  border-color: var(--mimo-border);
+  background: #fff;
+}
+
+.mimo-claw-sidebar {
+  @apply flex w-[200px] shrink-0 flex-col border-r;
+  border-color: var(--mimo-border);
+  background: var(--mimo-warm);
+}
+
+.mimo-claw-sidebar-collapsed {
+  @apply w-12;
+}
+
+.mimo-product-sidebar-full {
+  @apply h-screen shrink-0;
+}
+
+.mimo-token-plan-section {
+  @apply space-y-4;
+}
+
+.mimo-token-plan-grid-top {
+  @apply grid gap-4;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .mimo-token-plan-grid-top {
+    grid-template-columns: minmax(220px, 30%) minmax(0, 1fr);
+  }
+}
+
+.mimo-token-plan-card {
+  @apply rounded-2xl border p-5 md:p-6;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-token-plan-card-plan {
+  @apply flex min-h-[120px] flex-col p-4 md:p-5;
+  background: linear-gradient(135deg, #ede4d3 0%, #f8f4ec 42%, #ffffff 100%);
+}
+
+.mimo-token-plan-card-usage {
+  @apply flex min-h-[148px] flex-col;
+}
+
+.mimo-token-plan-panel {
+  @apply rounded-2xl border p-5 md:p-6;
+  border-color: var(--mimo-border);
+  background: #ffffff;
+}
+
+.mimo-token-plan-panel-head {
+  @apply mb-4 flex items-center justify-between gap-3;
+}
+
+.mimo-token-plan-field {
+  @apply flex items-center gap-2 rounded-lg border px-3 py-2.5;
+  border-color: var(--mimo-border);
+  background: #fafafa;
+}
+
+.mimo-token-plan-url-row {
+  @apply flex flex-col gap-2 py-3 sm:flex-row sm:items-center;
+  border-bottom: 1px solid color-mix(in srgb, var(--mimo-border) 60%, transparent);
+}
+
+.mimo-token-plan-url-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.mimo-token-plan-url-label {
+  @apply shrink-0 text-sm text-mimo-muted sm:w-52;
+}
+
+.mimo-token-plan-benefits {
+  @apply divide-y;
+  border-color: color-mix(in srgb, var(--mimo-border) 60%, transparent);
+}
+
+.mimo-token-plan-benefit-row {
+  @apply grid gap-1 py-4 sm:grid-cols-[112px_minmax(0,1fr)] sm:gap-6;
+}
+
+.mimo-token-plan-benefit-row dt {
+  @apply text-sm text-mimo-muted;
+}
+
+.mimo-token-plan-benefit-row dd {
+  @apply text-sm leading-relaxed;
+  color: var(--mimo-text);
+}
+
+.mimo-token-plan-switch {
+  @apply relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition;
+  border-color: var(--mimo-border);
+  background: #f0f0f0;
+}
+
+.mimo-token-plan-switch-on {
+  background: #000000;
+  border-color: #000000;
+}
+
+.mimo-token-plan-switch-thumb {
+  @apply absolute left-0.5 h-4 w-4 rounded-full bg-white shadow transition;
+}
+
+.mimo-token-plan-switch-on .mimo-token-plan-switch-thumb {
+  transform: translateX(16px);
+}
+
+.mimo-token-plan-usage-toolbar {
+  @apply flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between;
+}
+
+.mimo-token-plan-segment {
+  @apply inline-flex rounded-lg border p-0.5;
+  border-color: var(--mimo-border);
+  background: #fafafa;
+}
+
+.mimo-token-plan-segment-btn {
+  @apply rounded-md px-3 py-1 text-sm text-mimo-muted transition;
+}
+
+.mimo-token-plan-segment-btn-active {
+  @apply bg-white font-medium shadow-sm;
+  color: var(--mimo-text);
+}
+
+.mimo-token-plan-subsection-title {
+  @apply flex items-center gap-2 text-base font-semibold;
+}
+
+.mimo-token-plan-subsection-title::before {
+  content: "";
+  @apply inline-block h-4 w-1 rounded-full;
+  background: #c9a96e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mimo-announce-track,
+  .mimo-hero-glow,
+  .mimo-hero-wave span,
+  .mimo-product-orbit {
+    animation: none !important;
+  }
+
+  .mimo-hover-lift:hover {
+    transform: none;
+  }
+}
+
+.dark .mimo-product-app,
+.dark .mimo-studio-main,
+.dark .mimo-claw-header,
+.dark .mimo-studio-header {
+  background: var(--mimo-bg);
+  color: var(--mimo-text);
+}
+
+.dark .mimo-studio-sidebar,
+.dark .mimo-claw-sidebar {
+  background: var(--mimo-surface);
+  border-color: var(--mimo-border);
+}
+
+.dark .mimo-claw-sidebar {
+  background: var(--mimo-surface);
+}
+
+.dark .mimo-studio-prompt-card,
+.dark .mimo-console-panel,
+.dark .mimo-studio-input-wrap {
+  background: var(--mimo-surface);
+  border-color: var(--mimo-border);
+}
+
+.dark .mimo-hero-split {
+  background: linear-gradient(135deg, var(--mimo-warm) 0%, var(--mimo-bg) 45%, var(--mimo-surface) 100%);
+}
+
+.dark .mimo-page-hero {
+  background: linear-gradient(180deg, var(--mimo-warm), var(--mimo-bg));
+}
+
+.dark .mimo-header {
+  background: var(--mimo-surface);
+}
+
+.dark .mimo-studio-model-menu,
+.dark .mimo-invite-modal {
+  background: var(--mimo-surface);
+  border-color: var(--mimo-border);
+}

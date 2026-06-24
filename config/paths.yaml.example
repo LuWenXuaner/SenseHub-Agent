@@ -1,0 +1,33 @@
+# 复制为 config/paths.yaml 并填写绝对路径
+
+runtime:
+  sensehub_root: "/path/to/SenseHub Agent"
+  venv_path: ""
+  python_path: "/path/to/python"
+  node_path: "/path/to/node"
+  conda_env: ""
+
+data:
+  root: "/path/to/SenseHub Agent/SenseHubData"
+  sqlite: "/path/to/SenseHub Agent/SenseHubData/db/sensehub.db"
+  screenshots: "/path/to/SenseHub Agent/SenseHubData/screenshots"
+  recordings: "/path/to/SenseHub Agent/SenseHubData/recordings"
+  logs: "/path/to/SenseHub Agent/SenseHubData/logs"
+
+models:
+  root: "/path/to/SenseHub Agent/Models"
+  yolo_weights: "/path/to/SenseHub Agent/Models/yolov8n.pt"
+  yolo_pose_weights: "/path/to/SenseHub Agent/Models/yolov8n-pose.pt"
+  whisper_model: "/path/to/SenseHub Agent/Models/whisper/ggml-small.bin"
+  vad_model: "/path/to/SenseHub Agent/Models/silero_vad.onnx"
+  funasr_model_dir: "/path/to/SenseHub Agent/Models/funasr"
+
+tools:
+  ffmpeg: ""
+  tesseract: ""
+  tessdata: ""
+  cuda: ""
+
+devices:
+  camera_index: 0
+  mic_device_name: ""

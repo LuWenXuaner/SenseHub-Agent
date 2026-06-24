@@ -1,0 +1,32 @@
+# 安全策略示例（复制为 policies.yaml）
+
+network:
+  bind_host: "127.0.0.1"
+  allow_lan: false
+  ip_whitelist: []
+
+auth:
+  require_login: true
+  session_hours: 24
+  max_login_attempts: 5
+
+execution:
+  pyautogui_failsafe: true
+  file_whitelist_dirs:
+    - "/path/to/SenseHub Agent/SenseHubData/workspace"
+  command_blacklist:
+    - format
+    - shutdown
+    - reg delete
+
+risk_levels:
+  L0: ["query_status", "list_windows"]
+  L1: ["open_app", "screenshot", "web_search"]
+  L2: ["delete_file", "move_file", "send_email"]
+  L3: ["format_disk", "modify_registry", "run_shell"]
+
+privacy:
+  camera_default_off: true
+  mic_default_off: true
+  upload_frames_to_cloud: false
+  screenshot_retention_days: 7

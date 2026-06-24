@@ -1,0 +1,5 @@
+# 启用的 bundled Skills（id 列表）
+enabled:
+  - desktop-automation
+  - im-contact-search
+  - browser-automation

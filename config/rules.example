@@ -1,0 +1,44 @@
+# 自定义规则示例
+
+rules:
+  - id: person_alert
+    name: 人员出现提醒
+    enabled: true
+    tier_min: lite
+    trigger:
+      type: vision
+      event: person_detected
+      confidence_min: 0.7
+    action:
+      type: notify
+      message: 检测到人员进入画面
+
+  - id: voice_notepad
+    name: 语音打开记事本
+    enabled: true
+    tier_min: lite
+    trigger:
+      type: speech
+      match: 打开记事本
+      bypass_llm: true
+    action:
+      type: macro
+      steps:
+        - tool: open_app
+          params:
+            name: notepad
+
+  - id: gesture_screenshot
+    name: 举手截图
+    enabled: false
+    tier_min: pro
+    trigger:
+      type: gesture
+      gesture: hand_raised
+      hold_frames: 10
+    action:
+      type: macro
+      steps:
+        - tool: screenshot
+          params:
+            mode: fullscreen

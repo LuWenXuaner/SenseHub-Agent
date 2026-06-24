@@ -1,0 +1,50 @@
+[project]
+name = "sensehub-agent"
+version = "0.1.0"
+description = "灵枢 Agent - 多模态感知人机交互控制系统"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.27.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
+    "python-multipart>=0.0.12",
+    "websockets>=13.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "pyautogui>=0.9.54",
+    "pywin32>=308; sys_platform == 'win32'",
+    "pyperclip>=1.9.0",
+    "playwright>=1.48.0",
+    "mss>=9.0.0",
+    "pillow>=10.0.0",
+    "structlog>=24.0.0",
+    "opencv-python-headless>=4.10.0",
+    "ultralytics>=8.3.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+phase2 = ["faster-whisper>=1.0.0", "sounddevice>=0.5.0"]
+phase3 = ["edge-tts>=6.1.0"]
+dev = ["pytest>=8.0", "ruff>=0.8.0"]
+
+[project.scripts]
+sensehub = "sensehub.main:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sensehub*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

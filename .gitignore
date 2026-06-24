@@ -1,0 +1,81 @@
+# ========== 密钥与本地配置（切勿提交）==========
+config/local.env
+config/paths.yaml
+config/policies.yaml
+config/models.yaml
+config/rules.yaml
+scripts/deploy/target.env
+
+# 环境变量（任意位置）
+.env
+.env.*
+!.env.example
+*.local.env
+
+# ========== 密钥与证书 ==========
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+*.crt
+secrets/
+credentials.json
+
+# ========== 数据、数据库、运行时 ==========
+data/
+SenseHubData/
+Models/
+models/
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.log
+screenshots/
+recordings/
+workspace/
+
+# ========== Python ==========
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ========== Node / 前端构建 ==========
+web/node_modules/
+web/dist/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========== 第三方示例（非本项目代码，体积大）==========
+agent-example/
+skills-example/
+
+# ========== IDE / 编辑器 / Cursor ==========
+.idea/
+.vscode/
+*.swp
+.cursor/projects/
+.cursor/plans/
+
+# ========== 系统 ==========
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ========== 部署 / 临时 ==========
+*.bak
+*.tmp
+/tmp/
