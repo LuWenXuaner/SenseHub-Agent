@@ -14,7 +14,25 @@ from sensehub.execution.browser.playwright_browser import (
     browser_status,
     browser_tabs,
 )
-from sensehub.execution.tools import agent_ops, browser, clipboard, desktop, document_gen, file_ops, gui, research, screenshot, system, virtual
+from sensehub.execution.browser.playwright_enhanced import (
+    browser_click as pw_browser_click,
+    browser_fill as pw_browser_fill,
+    browser_get_text as pw_browser_get_text,
+    browser_get_html as pw_browser_get_html,
+    browser_wait as pw_browser_wait,
+    browser_scroll as pw_browser_scroll,
+    browser_new_tab,
+    browser_switch_tab,
+    browser_close_tab,
+    browser_list_tabs,
+    browser_go_back,
+    browser_go_forward,
+    browser_reload,
+    browser_evaluate,
+    browser_screenshot as pw_browser_screenshot,
+)
+from sensehub.execution.tools import agent_ops, browser, clipboard, desktop, file_ops, gui, research, screenshot, system, virtual
+from sensehub.execution.tools import gui_enhanced, file_ops_enhanced, screenshot_enhanced
 from sensehub.models.schemas import PlanStep, StepResult
 
 ToolFn = Callable[[dict[str, Any]], dict[str, Any]]
@@ -37,16 +55,19 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     "list_windows": (desktop.list_windows, "L0"),
     "active_window": (desktop.active_window, "L0"),
     "type_text": (desktop.type_text, "L1"),
-    "save_notepad": (desktop.save_notepad, "L1"),
-    "notepad_type_save": (desktop.notepad_type_save, "L1"),
-    "wechat_send_message": (desktop.wechat_send_message, "L1"),
     "press_key": (desktop.press_key, "L1"),
     # 键鼠
     "click": (gui.click, "L1"),
     "double_click": (gui.double_click, "L1"),
+    "right_click": (gui_enhanced.right_click, "L1"),
     "scroll": (gui.scroll, "L1"),
     "hotkey": (gui.hotkey, "L1"),
     "wait": (gui.wait, "L0"),
+    "move_to": (gui_enhanced.move_to, "L0"),
+    "get_position": (gui_enhanced.get_position, "L0"),
+    "drag": (gui_enhanced.drag, "L1"),
+    "click_image": (gui_enhanced.click_image, "L1"),
+    "locate_image": (gui_enhanced.locate_image, "L0"),
     # 浏览器
     "web_search": (browser.web_search, "L1"),
     "open_url": (browser.open_url, "L1"),
@@ -55,18 +76,37 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     "browser_snapshot": (browser_snapshot, "L0"),
     "browser_act": (browser_act, "L1"),
     "browser_tabs": (browser_tabs, "L0"),
+    "browser_click": (pw_browser_click, "L1"),
+    "browser_fill": (pw_browser_fill, "L1"),
+    "browser_get_text": (pw_browser_get_text, "L0"),
+    "browser_get_html": (pw_browser_get_html, "L0"),
+    "browser_wait": (pw_browser_wait, "L0"),
+    "browser_scroll": (pw_browser_scroll, "L1"),
+    "browser_new_tab": (browser_new_tab, "L1"),
+    "browser_switch_tab": (browser_switch_tab, "L1"),
+    "browser_close_tab": (browser_close_tab, "L1"),
+    "browser_list_tabs": (browser_list_tabs, "L0"),
+    "browser_go_back": (browser_go_back, "L1"),
+    "browser_go_forward": (browser_go_forward, "L1"),
+    "browser_reload": (browser_reload, "L1"),
+    "browser_evaluate": (browser_evaluate, "L0"),
+    "browser_screenshot": (pw_browser_screenshot, "L0"),
     # 信息检索（returns_data，供应答脑引用）
     "fetch_url": (research.fetch_url, "L0"),
-    "web_search_results": (research.web_search_results, "L0"),
     "get_weather": (research.get_weather, "L0"),
     # 文件
     "list_dir": (file_ops.list_dir, "L0"),
     "read_file": (file_ops.read_file, "L0"),
     "write_file": (file_ops.write_file, "L2"),
-    "generate_document": (document_gen.generate_document, "L2"),
     "copy_file": (file_ops.copy_file, "L2"),
     "file_exists": (file_ops.file_exists, "L0"),
     "open_folder": (file_ops.open_folder, "L1"),
+    "move_file": (file_ops_enhanced.move_file, "L2"),
+    "rename_file": (file_ops_enhanced.rename_file, "L2"),
+    "delete_file": (file_ops_enhanced.delete_file, "L2"),
+    "search_files": (file_ops_enhanced.search_files, "L0"),
+    "get_file_info": (file_ops_enhanced.get_file_info, "L0"),
+    "ensure_directory": (file_ops_enhanced.ensure_directory, "L1"),
     # 剪贴板
     "get_clipboard": (clipboard.get_clipboard, "L0"),
     "set_clipboard": (clipboard.set_clipboard, "L1"),
@@ -83,6 +123,8 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     "virtual_keyboard_toggle": (virtual.virtual_keyboard_toggle, "L1"),
     # 感知
     "screenshot": (screenshot.run, "L1"),
+    "capture_region": (screenshot_enhanced.capture_region, "L0"),
+    "capture_window": (screenshot_enhanced.capture_window, "L0"),
     # VLM 兜底
     "gui_agent": (_gui_agent_tool, "L1"),
 }

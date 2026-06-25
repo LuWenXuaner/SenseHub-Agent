@@ -9,32 +9,20 @@ TOOL_CATALOG: dict[str, dict] = {
         "risk": "L1",
         "returns_data": False,
         "side_effect": "若已在运行则聚焦主窗口，否则启动",
-        "desc": "打开并置前（focus 默认 true）；后续 type_text/save 假定已聚焦，直接操作",
-        "params": {
-            "name": "str",
-            "focus": "bool=true",
-            "reuse_if_open": "bool=true",
-            "startup_wait": "float=1.1",
-            "focus_timeout": "float=10.0",
-            "settle_wait": "float=0.45",
-        },
+        "desc": "打开应用；已在运行时不会重复启动（reuse_if_open 默认 true）",
+        "params": {"name": "str", "focus": "bool=true", "reuse_if_open": "bool=true"},
     },
     "close_app": {
         "category": "desktop",
         "risk": "L1",
-        "desc": "置前目标窗口后 Alt+F4 关闭；用 name（notepad/记事本）或 title 匹配，勿臆造中文标题",
-        "params": {
-            "name": "str?",
-            "title": "str?",
-            "timeout": "float=6.0",
-        },
-        "one_of": [["name"], ["title"]],
+        "desc": "按窗口标题关闭应用（Alt+F4）",
+        "params": {"title": "str"},
     },
     "focus_window": {
         "category": "desktop",
         "risk": "L1",
         "desc": "窗口置前",
-        "params": {"title": "str", "timeout": "float=6.0", "settle_wait": "float=0.35", "click_center": "bool=false"},
+        "params": {"title": "str"},
     },
     "minimize_window": {
         "category": "desktop",
@@ -65,58 +53,27 @@ TOOL_CATALOG: dict[str, dict] = {
     "type_text": {
         "category": "desktop",
         "risk": "L1",
-        "desc": "向前台输入/粘贴；默认不 refocus，须先 open_app 置前",
-        "params": {
-            "text": "str",
-            "app": "str?",
-            "refocus": "false|true=false",
-            "pre_wait": "float=0.12",
-            "post_wait": "float=0.15",
-        },
-    },
-    "save_notepad": {
-        "category": "desktop",
-        "risk": "L1",
-        "desc": "记事本 Ctrl+S → 粘贴路径 → 回车",
-        "params": {"filename": "str=note.txt"},
-    },
-    "notepad_type_save": {
-        "category": "desktop",
-        "risk": "L1",
-        "desc": "记事本原子操作：open_app 置前 → Ctrl+V 粘贴 → Ctrl+S 保存",
-        "params": {"text": "str", "filename": "str=note.txt", "open": "bool=true"},
-    },
-    "wechat_send_message": {
-        "category": "desktop",
-        "risk": "L1",
-        "desc": "微信原子操作：置前一次 → Ctrl+F 搜联系人 → 进会话 → 粘贴 → 回车发送（后续步骤默认焦点正确）",
-        "params": {
-            "contact": "str",
-            "message": "str",
-            "send": "bool=true",
-            "open": "bool=false",
-            "search_wait": "float=0.9",
-            "chat_wait": "float=0.55",
-        },
+        "desc": "向焦点窗口输入文本（支持中文粘贴）",
+        "params": {"text": "str", "app": "str?"},
     },
     "press_key": {
         "category": "desktop",
         "risk": "L1",
         "desc": "单键或组合键",
-        "params": {"keys": "list[str]?", "key": "str?"},
-        "one_of": [["keys"], ["key"]],
+        "params": {"keys": "list[str] 或 key=str"},
     },
     # --- 键鼠坐标 ---
     "click": {"category": "gui", "risk": "L1", "desc": "点击坐标", "params": {"x": "float", "y": "float", "button": "left|right"}},
     "double_click": {"category": "gui", "risk": "L1", "desc": "双击", "params": {"x": "float", "y": "float"}},
+    "right_click": {"category": "gui", "risk": "L1", "desc": "右键点击", "params": {"x": "float", "y": "float"}},
     "scroll": {"category": "gui", "risk": "L1", "desc": "滚轮", "params": {"clicks": "int", "x": "float?", "y": "float?"}},
-    "hotkey": {
-        "category": "gui",
-        "risk": "L1",
-        "desc": "快捷键；默认发往当前前台（须先 open_app）；可选 app+focus=true 强制置前",
-        "params": {"keys": "list[str]", "app": "str?", "focus": "bool=false", "pre_wait": "float=0.12"},
-    },
+    "hotkey": {"category": "gui", "risk": "L1", "desc": "快捷键", "params": {"keys": "list[str]"}},
     "wait": {"category": "gui", "risk": "L0", "desc": "等待秒数", "params": {"seconds": "float"}},
+    "move_to": {"category": "gui", "risk": "L0", "desc": "移动鼠标到坐标", "params": {"x": "float", "y": "float", "duration": "float=0.2"}},
+    "get_position": {"category": "gui", "risk": "L0", "returns_data": True, "desc": "获取鼠标当前位置", "params": {}},
+    "drag": {"category": "gui", "risk": "L1", "desc": "拖拽从 start 到 end", "params": {"start_x": "float", "start_y": "float", "end_x": "float", "end_y": "float", "duration": "float=0.3"}},
+    "click_image": {"category": "gui", "risk": "L1", "desc": "基于图片模板匹配点击（OpenCV 抗界面变化）", "params": {"template": "str", "confidence": "float=0.8", "button": "str=left", "retry": "int=3"}},
+    "locate_image": {"category": "gui", "risk": "L0", "returns_data": True, "desc": "在屏幕上查找图片模板位置", "params": {"template": "str", "confidence": "float=0.8", "region": "list[int]?"}},
     # --- 浏览器 ---
     "web_search": {
         "category": "browser",
@@ -169,6 +126,112 @@ TOOL_CATALOG: dict[str, dict] = {
         "desc": "浏览器标签页信息",
         "params": {},
     },
+    # --- 增强浏览器操作 ---
+    "browser_click": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "按 CSS 选择器点击元素",
+        "params": {"selector": "str", "timeout": "int=30000"},
+    },
+    "browser_fill": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "按 CSS 选择器填写表单",
+        "params": {"selector": "str", "value": "str", "timeout": "int=30000"},
+    },
+    "browser_get_text": {
+        "category": "browser",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "提取元素文本",
+        "params": {"selector": "str", "timeout": "int=10000"},
+    },
+    "browser_get_html": {
+        "category": "browser",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "提取元素 HTML",
+        "params": {"selector": "str=body", "timeout": "int=10000"},
+    },
+    "browser_wait": {
+        "category": "browser",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "等待元素出现/可见",
+        "params": {"selector": "str", "timeout": "int=30000", "state": "str=visible"},
+    },
+    "browser_scroll": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "滚动页面（down/up/bottom/top）",
+        "params": {"direction": "str=down", "amount": "int=500"},
+    },
+    "browser_new_tab": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "新建浏览器标签页",
+        "params": {"url": "str=about:blank"},
+    },
+    "browser_switch_tab": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "按 index/title/url 切换标签页",
+        "params": {"index": "int?", "title": "str?", "url": "str?"},
+    },
+    "browser_close_tab": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "关闭标签页（默认当前）",
+        "params": {"index": "int=-1"},
+    },
+    "browser_list_tabs": {
+        "category": "browser",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "列出所有标签页",
+        "params": {},
+    },
+    "browser_go_back": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "浏览器后退",
+        "params": {},
+    },
+    "browser_go_forward": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "浏览器前进",
+        "params": {},
+    },
+    "browser_reload": {
+        "category": "browser",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "刷新当前页面",
+        "params": {},
+    },
+    "browser_evaluate": {
+        "category": "browser",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "在页面执行 JS 脚本",
+        "params": {"script": "str"},
+    },
+    "browser_screenshot": {
+        "category": "browser",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "浏览器页面截图",
+        "params": {"selector": "str?", "full_page": "bool=false"},
+    },
     "fetch_url": {
         "category": "research",
         "risk": "L0",
@@ -176,19 +239,12 @@ TOOL_CATALOG: dict[str, dict] = {
         "desc": "HTTP 抓取网页/JSON 并提取可读文本（不打开浏览器窗口）",
         "params": {"url": "str"},
     },
-    "web_search_results": {
-        "category": "research",
-        "risk": "L0",
-        "returns_data": True,
-        "desc": "全网搜索并返回结构化结果（标题/链接/摘要），不打开浏览器窗口",
-        "params": {"query": "str", "max_results": "int=8", "source": "duckduckgo|auto=auto"},
-    },
     "get_weather": {
         "category": "research",
         "risk": "L0",
         "returns_data": True,
         "desc": "查询城市天气预报（返回结构化数据，供旅游/出行建议引用）",
-        "params": {"location": "str", "days": "int=5", "lang": "str=zh"},
+        "params": {"location": "str", "days": "int=2", "lang": "str=zh"},
     },
     # --- 文件（限制在 DATA_ROOT / 用户目录） ---
     "list_dir": {
@@ -211,21 +267,6 @@ TOOL_CATALOG: dict[str, dict] = {
         "desc": "写入文本文件",
         "params": {"path": "str", "content": "str", "append": "bool=false"},
     },
-    "generate_document": {
-        "category": "file",
-        "risk": "L2",
-        "returns_data": True,
-        "desc": "用 Python 库生成 docx/xlsx/pptx/txt/csv/md 并保存（相对路径默认落用户保存目录）",
-        "params": {
-            "path": "str",
-            "format": "docx|xlsx|pptx|txt|csv|md",
-            "title": "str?",
-            "content": "str?",
-            "headers": "list?",
-            "rows": "list?",
-            "slides": "list?",
-        },
-    },
     "copy_file": {
         "category": "file",
         "risk": "L2",
@@ -242,6 +283,44 @@ TOOL_CATALOG: dict[str, dict] = {
         "category": "file",
         "risk": "L1",
         "desc": "资源管理器打开文件夹",
+        "params": {"path": "str"},
+    },
+    "move_file": {
+        "category": "file",
+        "risk": "L2",
+        "desc": "移动文件/目录",
+        "params": {"src": "str", "dst": "str"},
+    },
+    "rename_file": {
+        "category": "file",
+        "risk": "L2",
+        "desc": "重命名文件/目录",
+        "params": {"path": "str", "new_name": "str"},
+    },
+    "delete_file": {
+        "category": "file",
+        "risk": "L2",
+        "desc": "删除文件或目录（高风险，需确认）",
+        "params": {"path": "str"},
+    },
+    "search_files": {
+        "category": "file",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "递归搜索文件，支持通配符",
+        "params": {"pattern": "str", "path": "str=.", "recursive": "bool=true", "max_results": "int=100"},
+    },
+    "get_file_info": {
+        "category": "file",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "获取文件详细信息",
+        "params": {"path": "str"},
+    },
+    "ensure_directory": {
+        "category": "file",
+        "risk": "L1",
+        "desc": "确保目录存在，不存在则创建",
         "params": {"path": "str"},
     },
     # --- 剪贴板 ---
@@ -266,8 +345,22 @@ TOOL_CATALOG: dict[str, dict] = {
         "category": "perception",
         "risk": "L1",
         "returns_data": True,
-        "desc": "截屏",
-        "params": {"mode": "fullscreen|active_window"},
+        "desc": "截屏（全屏/窗口/区域，支持 Base64）",
+        "params": {"mode": "fullscreen|active_window|region", "base64": "bool=false", "quality": "int=85"},
+    },
+    "capture_region": {
+        "category": "perception",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "指定区域截图",
+        "params": {"left": "int", "top": "int", "width": "int", "height": "int", "base64": "bool=false"},
+    },
+    "capture_window": {
+        "category": "perception",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "按标题截取窗口截图（空=前台窗口）",
+        "params": {"title": "str?", "base64": "bool=false"},
     },
     "get_task_status": {
         "category": "agent",
@@ -314,30 +407,8 @@ def tool_returns_data(tool: str) -> bool:
     return bool(TOOL_CATALOG.get(tool, {}).get("returns_data"))
 
 
-def _example_for_spec(spec: str) -> str:
-    raw = str(spec).replace("?", "").strip()
-    base = raw.split("=")[0].strip()
-    low = base.lower()
-    if low.startswith("int"):
-        return "1"
-    if low.startswith("float"):
-        return "0.5"
-    if low.startswith("bool"):
-        return "true"
-    if low.startswith("list"):
-        return '["..."]'
-    if "|" in base and not any(low.startswith(t) for t in ("int", "float", "bool", "str", "list")):
-        first = base.split("|")[0].strip()
-        return f'"{first}"'
-    return '"..."'
-
-
 def format_tools_for_planner() -> str:
-    lines = [
-        "可用工具（tool）按类别。注意 returns_data：true=结果可写入回答，false=仅副作用操作。",
-        "复合任务通用链：returns_data 取证 → 据 output 撰写正文 → notepad_type_save/write_file 等 action。",
-        "调用规范：tool 参数必须严格匹配 params，禁止虚构字段；不确定时先观察再行动。",
-    ]
+    lines = ["可用工具（tool）按类别。注意 returns_data：true=结果可写入回答，false=仅副作用操作。"]
     by_cat: dict[str, list[str]] = {}
     for name, meta in TOOL_CATALOG.items():
         cat = meta.get("category", "other")
@@ -361,20 +432,5 @@ def format_tools_for_planner() -> str:
             m = TOOL_CATALOG[t]
             params = ", ".join(f'{k}: {v}' for k, v in m.get("params", {}).items()) or "无"
             returns = "returns_data=true" if m.get("returns_data") else "returns_data=false"
-            one_of = m.get("one_of")
-            one_of_hint = ""
-            if isinstance(one_of, list) and one_of:
-                opts = ["/".join(g) for g in one_of if isinstance(g, list) and g]
-                if opts:
-                    one_of_hint = f" | 约束: 至少满足 {' 或 '.join(opts)}"
-            example_parts: list[str] = []
-            for key, spec in (m.get("params", {}) or {}).items():
-                if "?" in str(spec):
-                    continue
-                example_parts.append(f'"{key}": {_example_for_spec(str(spec))}')
-            example = "{ " + ", ".join(example_parts) + " }" if example_parts else "{}"
-            lines.append(
-                f"- {t} [{m.get('risk', 'L1')}, {returns}]: {m['desc']} | params: {params} | "
-                f"示例 params: {example}{one_of_hint}"
-            )
+            lines.append(f"- {t} [{m.get('risk', 'L1')}, {returns}]: {m['desc']} | params: {params}")
     return "\n".join(lines)
