@@ -362,6 +362,13 @@ TOOL_CATALOG: dict[str, dict] = {
         "desc": "按标题截取窗口截图（空=前台窗口）",
         "params": {"title": "str?", "base64": "bool=false"},
     },
+    "capture_region_interactive": {
+        "category": "perception",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "打开全屏覆盖层，鼠标拖拽选择区域后截图（交互式区域截图）",
+        "params": {},
+    },
     "get_task_status": {
         "category": "agent",
         "risk": "L0",

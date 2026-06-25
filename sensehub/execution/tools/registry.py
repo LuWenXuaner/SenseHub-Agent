@@ -33,6 +33,7 @@ from sensehub.execution.browser.playwright_enhanced import (
 )
 from sensehub.execution.tools import agent_ops, browser, clipboard, desktop, file_ops, gui, research, screenshot, system, virtual
 from sensehub.execution.tools import gui_enhanced, file_ops_enhanced, screenshot_enhanced
+from sensehub.execution.tools.screenshot_interactive import capture_interactive_region
 from sensehub.models.schemas import PlanStep, StepResult
 
 ToolFn = Callable[[dict[str, Any]], dict[str, Any]]
@@ -125,6 +126,7 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     "screenshot": (screenshot.run, "L1"),
     "capture_region": (screenshot_enhanced.capture_region, "L0"),
     "capture_window": (screenshot_enhanced.capture_window, "L0"),
+    "capture_region_interactive": (capture_interactive_region, "L0"),
     # VLM 兜底
     "gui_agent": (_gui_agent_tool, "L1"),
 }
