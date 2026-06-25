@@ -83,8 +83,14 @@ TOOL_CATALOG: dict[str, dict] = {
     "notepad_type_save": {
         "category": "desktop",
         "risk": "L1",
-        "desc": "记事本原子操作：open_app 置前 → Ctrl+V 粘贴 → Ctrl+S 保存",
-        "params": {"text": "str", "filename": "str=note.txt", "open": "bool=true"},
+        "desc": "记事本：Python 写入磁盘 → 打开文件 → 可选 Ctrl+S → 默认关闭窗口（免粘贴、免 Alt+Tab）",
+        "params": {
+            "text": "str",
+            "filename": "str=note.txt",
+            "open": "bool=true",
+            "save": "bool=false",
+            "close": "bool=true",
+        },
     },
     "wechat_send_message": {
         "category": "desktop",
@@ -183,6 +189,31 @@ TOOL_CATALOG: dict[str, dict] = {
         "desc": "全网搜索并返回结构化结果（标题/链接/摘要），不打开浏览器窗口",
         "params": {"query": "str", "max_results": "int=8", "source": "duckduckgo|auto=auto"},
     },
+    "search_images": {
+        "category": "research",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "搜索网络图片，返回直链 URL 列表（不打开浏览器）",
+        "params": {"query": "str", "max_results": "int=8"},
+    },
+    "download_image": {
+        "category": "file",
+        "risk": "L1",
+        "desc": "从图片 URL 下载到本地（默认用户保存目录）",
+        "params": {"url": "str", "filename": "str?", "path": "str?"},
+    },
+    "search_and_download_image": {
+        "category": "research",
+        "risk": "L1",
+        "returns_data": True,
+        "desc": "搜索图片并下载一张到本地；open_browser=true 时同时用 Edge 打开搜索页",
+        "params": {
+            "query": "str",
+            "filename": "str?",
+            "index": "int=0",
+            "open_browser": "bool=false",
+        },
+    },
     "get_weather": {
         "category": "research",
         "risk": "L0",
@@ -215,7 +246,7 @@ TOOL_CATALOG: dict[str, dict] = {
         "category": "file",
         "risk": "L2",
         "returns_data": True,
-        "desc": "用 Python 库生成 docx/xlsx/pptx/txt/csv/md 并保存（相对路径默认落用户保存目录）",
+        "desc": "简单文档：用内置模板生成 docx/xlsx/pptx/txt/csv/md（标题+正文/表格/幻灯片）",
         "params": {
             "path": "str",
             "format": "docx|xlsx|pptx|txt|csv|md",
@@ -224,6 +255,22 @@ TOOL_CATALOG: dict[str, dict] = {
             "headers": "list?",
             "rows": "list?",
             "slides": "list?",
+        },
+    },
+    "run_document_script": {
+        "category": "file",
+        "risk": "L2",
+        "returns_data": True,
+        "desc": (
+            "复杂文档/海报：执行 LLM 编写的 Python 脚本（沙箱）。"
+            "须写入 OUTPUT_PATH；可用 python-docx/openpyxl/python-pptx/Pillow。"
+            "例：海报 save 到 OUTPUT_PATH"
+        ),
+        "params": {
+            "code": "str",
+            "output_path": "str",
+            "description": "str?",
+            "timeout": "float=60",
         },
     },
     "copy_file": {
@@ -268,6 +315,13 @@ TOOL_CATALOG: dict[str, dict] = {
         "returns_data": True,
         "desc": "截屏",
         "params": {"mode": "fullscreen|active_window"},
+    },
+    "get_perception_state": {
+        "category": "perception",
+        "risk": "L0",
+        "returns_data": True,
+        "desc": "查询摄像头感知上下文（人数、手势、近期动作）",
+        "params": {},
     },
     "get_task_status": {
         "category": "agent",

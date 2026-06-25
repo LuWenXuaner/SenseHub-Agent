@@ -1,12 +1,29 @@
 import { useEffect, useState } from "react";
 import { api, Rule } from "@/lib/api";
 
+type TriggerType = "speech" | "gesture" | "vision";
+type ActionType = "notify" | "confirm_pending" | "cancel_pending";
+
+const GESTURE_EVENTS = [
+  { id: "wave", label: "挥手" },
+  { id: "nod", label: "点头" },
+  { id: "shake", label: "摇头" },
+  { id: "hand_raised", label: "举手" },
+];
+
+const VISION_EVENTS = [{ id: "person_detected", label: "人员出现" }];
+
 export function RulesPage({ embedded = false }: { embedded?: boolean }) {
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
+  const [triggerType, setTriggerType] = useState<TriggerType>("speech");
   const [speechMatch, setSpeechMatch] = useState("");
+  const [gestureEvent, setGestureEvent] = useState("nod");
+  const [visionEvent, setVisionEvent] = useState("person_detected");
+  const [confidenceMin, setConfidenceMin] = useState(0.55);
+  const [actionType, setActionType] = useState<ActionType>("notify");
   const [notifyMsg, setNotifyMsg] = useState("");
 
   const load = () => {
@@ -33,13 +50,26 @@ export function RulesPage({ embedded = false }: { embedded?: boolean }) {
 
   const addRule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !speechMatch.trim()) return;
+    if (!name.trim()) return;
+    let trigger: Rule["trigger"];
+    if (triggerType === "speech") {
+      if (!speechMatch.trim()) return;
+      trigger = { type: "speech", match: speechMatch.trim(), bypass_llm: false };
+    } else if (triggerType === "gesture") {
+      trigger = { type: "gesture", event: gestureEvent, confidence_min: confidenceMin };
+    } else {
+      trigger = { type: "vision", event: visionEvent, confidence_min: confidenceMin };
+    }
+    const action =
+      actionType === "notify"
+        ? { type: "notify", message: notifyMsg.trim() || name.trim() }
+        : { type: actionType, message: notifyMsg.trim() || name.trim() };
     await api.createRule({
       name: name.trim(),
       enabled: true,
-      tier_min: "lite",
-      trigger: { type: "speech", match: speechMatch.trim(), bypass_llm: false },
-      action: { type: "notify", message: notifyMsg.trim() || `语音触发：${name}` },
+      tier_min: triggerType === "speech" ? "lite" : "pro",
+      trigger,
+      action,
     });
     setName("");
     setSpeechMatch("");
@@ -77,16 +107,60 @@ export function RulesPage({ embedded = false }: { embedded?: boolean }) {
             onChange={(e) => setName(e.target.value)}
             required
           />
+          <select className="input" value={triggerType} onChange={(e) => setTriggerType(e.target.value as TriggerType)}>
+            <option value="speech">语音</option>
+            <option value="gesture">手势</option>
+            <option value="vision">视觉</option>
+          </select>
+          {triggerType === "speech" && (
+            <input
+              className="input"
+              placeholder="语音匹配词（如：打开记事本）"
+              value={speechMatch}
+              onChange={(e) => setSpeechMatch(e.target.value)}
+              required
+            />
+          )}
+          {triggerType === "gesture" && (
+            <select className="input" value={gestureEvent} onChange={(e) => setGestureEvent(e.target.value)}>
+              {GESTURE_EVENTS.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {triggerType === "vision" && (
+            <select className="input" value={visionEvent} onChange={(e) => setVisionEvent(e.target.value)}>
+              {VISION_EVENTS.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {triggerType !== "speech" && (
+            <label className="text-sm">
+              置信度阈值
+              <input
+                type="number"
+                step={0.05}
+                min={0.3}
+                max={0.95}
+                className="input mt-1"
+                value={confidenceMin}
+                onChange={(e) => setConfidenceMin(Number(e.target.value))}
+              />
+            </label>
+          )}
+          <select className="input" value={actionType} onChange={(e) => setActionType(e.target.value as ActionType)}>
+            <option value="notify">仅通知</option>
+            <option value="confirm_pending">点头确认待确认任务</option>
+            <option value="cancel_pending">取消待确认任务</option>
+          </select>
           <input
             className="input"
-            placeholder="语音匹配词（如：打开记事本）"
-            value={speechMatch}
-            onChange={(e) => setSpeechMatch(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            placeholder="触发通知（可选）"
+            placeholder="触发说明（可选）"
             value={notifyMsg}
             onChange={(e) => setNotifyMsg(e.target.value)}
           />
@@ -106,6 +180,7 @@ export function RulesPage({ embedded = false }: { embedded?: boolean }) {
                   {r.trigger.type}
                   {r.trigger.event && ` · ${r.trigger.event}`}
                   {r.trigger.match && ` · 「${r.trigger.match}」`}
+                  {r.action.type !== "notify" && ` · 动作 ${r.action.type}`}
                 </p>
               </div>
               <div className="flex items-center gap-2">

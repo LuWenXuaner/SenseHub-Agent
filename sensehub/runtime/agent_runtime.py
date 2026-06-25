@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import Any
@@ -42,9 +43,11 @@ from sensehub.runtime.harness_multimodal import multimodal_prompt_addon
 _MAX_ITERATIONS = 15
 _MAX_RECOVERY_FAILURES = 3
 _OBSERVE_ONLY_TOOLS = frozenset({"list_windows", "active_window", "screenshot", "browser_status", "browser_tabs"})
-_SEARCH_HINTS = ("搜索", "查", "资料", "网页", "新闻", "全网", "wiki", "官网", "文档")
+_SEARCH_HINTS = ("搜索", "查", "资料", "网页", "新闻", "全网", "wiki", "官网", "文档", "图片", "图像", "照片")
 _BROWSER_HINTS = ("网站", "网页", "浏览器", "打开网址", "open url")
-_FILE_HINTS = ("保存", "写入", "文件", "文档", "导出", "txt", "docx", "xlsx", "ppt")
+_FILE_HINTS = ("保存", "写入", "文件", "文档", "导出", "txt", "docx", "xlsx", "ppt", "pptx", "word", "excel", "海报", "下载")
+_DOC_HINTS = ("word", "excel", "ppt", "pptx", "docx", "xlsx", "海报", "幻灯片", "表格")
+_IMAGE_HINTS = ("图片", "图像", "照片", "image", "photo", "png", "jpg")
 _DESKTOP_HINTS = ("打开", "点击", "输入", "窗口", "桌面", "记事本", "微信", "qq", "钉钉")
 _NOTEPAD_HINTS = ("记事本", "notepad")
 _INPUT_HINTS = ("输入", "写入", "打字", "键入", "粘贴")
@@ -68,7 +71,6 @@ def _load_enabled_skill_ids() -> set[str] | None:
 def _build_system_prompt(user_text: str, intent_raw: dict | None) -> str:
     skills = match_skills(user_text, intent_raw, enabled=_load_enabled_skill_ids())
     skills_block = format_skills_prompt(skills)
-    mm_block = multimodal_prompt_addon()
     mode = str((intent_raw or {}).get("action_mode", "")).lower()
     mode_hint = ""
     if mode == "answer":
@@ -88,6 +90,17 @@ def _build_system_prompt(user_text: str, intent_raw: dict | None) -> str:
 【通用执行链】returns_data 取证 → 根据 output 撰写完整正文 → action 工具（notepad_type_save/write_file 等）
 - 正文参数须由你根据取证结果填写，禁止占位语；系统必要时会调用「内容合成脑」辅助
 - 可 finish 向用户说明结果，但用户明确要求写入文件/记事本的须先完成写入工具"""
+    mm_block = multimodal_prompt_addon()
+    try:
+        from sensehub.perception.camera import CameraService
+        from sensehub.perception.context import PerceptionContext
+
+        if CameraService.get().running:
+            pctx = PerceptionContext.get().prompt_addon()
+            if pctx:
+                mm_block = (mm_block + "\n\n" if mm_block else "") + pctx
+    except Exception:
+        pass
     base = f"""你是灵枢 Agent「执行脑」。逐步使用工具完成目标，根据每步工具返回决定下一步。
 
 可用两种方式：
@@ -97,13 +110,15 @@ def _build_system_prompt(user_text: str, intent_raw: dict | None) -> str:
 原则：
 - observe → gather(returns_data) → compose → act；对话历史不代表当前桌面状态
 - 意图脑 suggested_tools / tool_params 为参考；正文类参数（text/content）须据取证 output 完整撰写
-- 记事本「打开+输入+保存」：notepad_type_save(text=正文, filename=…)；完成后按需 close_app(name=应用名)
-- 微信找人发消息：从用户原话理解完整 contact 与 message，调用 wechat_send_message(contact=, message=)；勿截断联系人名；工具内首步置前一次，之后默认焦点正确；不发送则 send=false
+- 记事本「写入+打开+保存+关闭」：notepad_type_save(text=正文, filename=…, close=true)；勿再单独 close_app，避免 Alt+Tab 冲突
+- 微信找人发消息：从用户原话理解完整 contact 与 message，**只调用** wechat_send_message(contact=, message=)；勿先 open_app；工具内首步置前一次；不发送则 send=false
 - finish 只陈述已验证结果；用户要「写入/保存」时不得在未执行写入工具前 finish
 - 禁止陷入“只观察不行动”：连续观察后必须转入 open_app/type_text/write_file 等执行动作
-- 需账号/扫码登录的应用（微信/QQ/钉钉等）：不代替用户登录；见登录界面则 agent_finish 提示用户先自行登录
+- 需账号/扫码登录的应用（微信/钉钉等）：不代替用户登录；见登录界面则 agent_finish 提示用户先自行登录
 - 相对路径文件默认保存到用户配置的默认保存路径；用户指定了其他路径则从其指定
-- Word/Excel/PPT：优先 generate_document；记事本纯文本可用 write_file
+- Word/Excel/PPT/海报：简单结构用 generate_document；复杂版式/海报/图表用 run_document_script(code, output_path)，脚本须写入 OUTPUT_PATH
+- 记事本纯文本可用 write_file
+- 搜索并下载图片：优先 search_and_download_image(query=关键词)；需 Edge 搜索页则 open_browser=true；分步可用 search_images → download_image
 {mode_hint}
 {skills_block}
 {harness_policy_block()}
@@ -216,8 +231,17 @@ def _desktop_goal_incomplete(user_text: str, steps: list[PlanStep]) -> str | Non
         )
     if notepad_task and wants_save and "save_notepad" not in tools and "notepad_type_save" not in tools:
         return "用户要求保存记事本：请在 type_text 之后调用 save_notepad 或 notepad_type_save，再 finish。"
+    if needs_im_search_flow(user_text, None) and any(k in user_text for k in ("发送", "发消息", "发给")):
+        if "wechat_send_message" not in tools:
+            if "open_app" in tools or "focus_window" in tools:
+                return (
+                    "用户要求 IM 发消息：请直接 wechat_send_message(contact=, message=)，"
+                    "工具会自动置前窗口，勿先 open_app/focus_window。"
+                )
     wants_close = any(k in user_text for k in ("关闭", "关掉", "退出"))
     if wants_close and "close_app" not in tools:
+        if "notepad_type_save" in tools:
+            return None
         return "用户要求关闭应用：请完成输入/保存后调用 close_app，再 finish。"
     return None
 
@@ -280,6 +304,8 @@ def _fallback_close_tools(user_text: str, steps: list[PlanStep]) -> list[tuple[s
     tools = {s.tool for s in steps}
     if "close_app" in tools:
         return []
+    if "notepad_type_save" in tools:
+        return []
     if not any(k in user_text for k in ("关闭", "关掉", "退出")):
         return []
     low = user_text.lower()
@@ -332,9 +358,25 @@ def _recommended_tool_order(
                 scores[name] += 8
 
     if any(k in user_text for k in _SEARCH_HINTS):
-        for name in ("web_search_results", "fetch_url", "browser_navigate", "browser_snapshot", "browser_act"):
+        for name in (
+            "search_and_download_image",
+            "search_images",
+            "download_image",
+            "web_search_results",
+            "fetch_url",
+            "browser_navigate",
+            "browser_snapshot",
+            "browser_act",
+        ):
             if name in scores:
                 scores[name] += 6
+
+    if any(k in user_text for k in _IMAGE_HINTS):
+        for name in ("search_and_download_image", "search_images", "download_image"):
+            if name in scores:
+                scores[name] += 12
+        if "下载" in user_text and "search_and_download_image" in scores:
+            scores["search_and_download_image"] += 10
 
     if any(k in user_text for k in _BROWSER_HINTS):
         for name in ("open_url", "web_search", "browser_navigate", "browser_snapshot", "browser_act"):
@@ -342,9 +384,19 @@ def _recommended_tool_order(
                 scores[name] += 4
 
     if any(k in user_text for k in _FILE_HINTS):
-        for name in ("write_file", "generate_document", "read_file", "list_dir", "file_exists", "save_notepad"):
+        for name in ("write_file", "generate_document", "run_document_script", "read_file", "list_dir", "file_exists", "save_notepad"):
             if name in scores:
                 scores[name] += 5
+
+    if any(k in user_text.lower() for k in _DOC_HINTS) or any(k in user_text for k in ("海报", "Word", "Excel", "PPT")):
+        for name in ("generate_document", "run_document_script"):
+            if name in scores:
+                scores[name] += 8
+        if any(k in user_text for k in ("海报", "排版", "样式", "图表", "复杂", "模板")):
+            if "run_document_script" in scores:
+                scores["run_document_script"] += 10
+        elif "generate_document" in scores:
+            scores["generate_document"] += 4
 
     if wants in {"desktop_action", "both"} or any(k in user_text for k in _DESKTOP_HINTS):
         for name in ("open_app", "focus_window", "active_window", "type_text", "press_key", "hotkey"):
@@ -353,10 +405,12 @@ def _recommended_tool_order(
 
     if needs_im_search_flow(user_text, intent_raw):
         if "wechat_send_message" in scores:
-            scores["wechat_send_message"] += 14
-        for name in ("hotkey", "press_key", "open_app", "type_text"):
+            scores["wechat_send_message"] += 22
+        if any(k in user_text for k in ("微信", "wechat", "WeChat")) and "wechat_send_message" in scores:
+            scores["wechat_send_message"] += 8
+        for name in ("hotkey", "press_key", "type_text"):
             if name in scores:
-                scores[name] += 6
+                scores[name] += 4
 
     if "保存" in user_text and any(h in user_text for h in _NOTEPAD_HINTS + ("notepad",)):
         for name in ("notepad_type_save", "save_notepad", "type_text"):
@@ -908,10 +962,11 @@ class AgentRuntime:
             return step, result, "fail"
 
         if step.tool == "wechat_send_message":
-            from sensehub.cognition.wechat_params import resolve_wechat_message_params
+            from sensehub.cognition.im_message_params import resolve_im_message_params
 
+            app_label = "微信"
             try:
-                params = await resolve_wechat_message_params(user_text, params)
+                params = await resolve_im_message_params(user_text, params, app_label=app_label)
                 step = PlanStep(
                     step_id=step.step_id,
                     tool=step.tool,
@@ -956,6 +1011,10 @@ class AgentRuntime:
             }
         )
 
+        if step.tool == "wechat_send_message":
+            # 等 Hub 收到 tool_start 并 blur，避免与 Ctrl+F 抢焦点
+            await asyncio.sleep(0.28)
+
         if step.tool == "gui_agent":
             from sensehub.cognition.vision_agent import run_gui_agent
 
@@ -970,7 +1029,11 @@ class AgentRuntime:
                 error=None if out.get("success") else str(out.get("error") or "gui_agent 失败"),
             )
         else:
-            result = execute_step(step)
+            if step.tool == "wechat_send_message":
+                result = execute_step(step)
+            else:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, execute_step, step)
 
         if result.success:
             login_msg = gate_login_screen(tool, result.output if isinstance(result.output, dict) else {}, user_text, intent_raw)

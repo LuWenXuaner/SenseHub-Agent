@@ -9,3 +9,4 @@ __all__ = ["init_perception"]
 
 def init_perception() -> None:
     rule_store.seed_defaults()
+    rule_store.ensure_perception_seed_rules()

@@ -233,6 +233,8 @@ export const api = {
       fileContent?: string;
       contextFiles?: { path: string; content: string }[];
       history?: ChatTurn[];
+      modelId?: string;
+      mode?: "agent" | "plan";
     } = {},
     signal?: AbortSignal
   ) =>
@@ -246,6 +248,8 @@ export const api = {
         file_content: opts.fileContent ?? "",
         context_files: opts.contextFiles ?? [],
         history: opts.history ?? [],
+        model_id: opts.modelId ?? "",
+        mode: opts.mode ?? "agent",
       }),
       signal,
     }),
@@ -393,11 +397,30 @@ export const api = {
     }),
   getVirtualCalibration: () =>
     request<VirtualCalibration>("/api/virtual-screen/calibration"),
-  saveVirtualCalibration: (screen_points: number[][], camera_points: number[][]) =>
+  getVirtualCalibGrid: () =>
+    request<{ points: number[][] }>("/api/virtual-screen/calib-grid"),
+  saveVirtualCalibration: (
+    screen_points: number[][],
+    camera_points: number[][],
+    frame_width = 0,
+    frame_height = 0
+  ) =>
     request<VirtualCalibration>("/api/virtual-screen/calibration", {
       method: "POST",
-      body: JSON.stringify({ screen_points, camera_points }),
+      body: JSON.stringify({ screen_points, camera_points, frame_width, frame_height }),
     }),
+  previewVirtualMap: () =>
+    request<{ ok: boolean; screen_x?: number; screen_y?: number; error?: string }>(
+      "/api/virtual-screen/preview-map",
+      { method: "POST" }
+    ),
+  perceptionConfig: () => request<Record<string, unknown>>("/api/perception/config"),
+  patchPerceptionConfig: (body: Record<string, unknown>) =>
+    request<Record<string, unknown>>("/api/perception/config", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  perceptionContext: () => request<Record<string, unknown>>("/api/perception/context"),
   airClick: () =>
     request<{ x: number; y: number }>("/api/virtual-screen/air-click", { method: "POST" }),
   tunnelStatus: () =>
@@ -857,7 +880,10 @@ export interface ServerMessage {
 export interface VirtualSessionStatus {
   active: boolean;
   calibrated: boolean;
+  mapping_mode?: "direct" | "homography";
+  homography_calibrated?: boolean;
   show_keyboard: boolean;
+  automation_suspended?: boolean;
   pointer?: { x: number; y: number };
 }
 

@@ -105,6 +105,39 @@ def handle_speech_text(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _schedule_confirm_pending() -> dict[str, Any]:
+    from sensehub.db import tasks as task_repo
+    from sensehub.orchestration.runner import confirm_and_run
+
+    tasks = task_repo.list_tasks(15)
+    pending = [t for t in tasks if t.status == "wait_confirm"]
+    if not pending:
+        return {"ok": False, "reason": "no_wait_confirm_task"}
+    task = pending[0]
+
+    async def _run() -> None:
+        await confirm_and_run(task.task_id)
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_run())
+    except RuntimeError:
+        asyncio.run(_run())
+    return {"ok": True, "task_id": task.task_id}
+
+
+def _cancel_latest_pending() -> dict[str, Any]:
+    from sensehub.db import tasks as task_repo
+    from sensehub.orchestration.runner import cancel_task
+
+    tasks = task_repo.list_tasks(15)
+    for t in tasks:
+        if t.status == "wait_confirm":
+            cancel_task(t.task_id)
+            return {"ok": True, "task_id": t.task_id}
+    return {"ok": False, "reason": "no_wait_confirm_task"}
+
+
 def _run_action(
     rule,
     payload: dict,
@@ -129,6 +162,50 @@ def _run_action(
         }
         _notify(msg)
         return msg
+
+    if action.type == "confirm_pending":
+        out = _schedule_confirm_pending()
+        msg = action.message or rule.name
+        if not out.get("ok"):
+            msg = f"{msg}（当前无待确认任务）"
+        event = log_event(
+            event_type="rule_triggered",
+            source="rules",
+            rule_id=rule.rule_id,
+            message=msg,
+            payload={**payload, **out},
+        )
+        body = {
+            "type": "rule_triggered",
+            "rule_id": rule.rule_id,
+            "name": rule.name,
+            "message": event.message,
+            "event": event.model_dump(),
+        }
+        _notify(body)
+        return body
+
+    if action.type == "cancel_pending":
+        out = _cancel_latest_pending()
+        msg = action.message or rule.name
+        if not out.get("ok"):
+            msg = f"{msg}（当前无待确认任务）"
+        event = log_event(
+            event_type="rule_triggered",
+            source="rules",
+            rule_id=rule.rule_id,
+            message=msg,
+            payload={**payload, **out},
+        )
+        body = {
+            "type": "rule_triggered",
+            "rule_id": rule.rule_id,
+            "name": rule.name,
+            "message": event.message,
+            "event": event.model_dump(),
+        }
+        _notify(body)
+        return body
 
     if action.type == "macro" and action.steps:
         if speech_bypass:

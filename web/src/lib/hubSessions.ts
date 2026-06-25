@@ -1,5 +1,6 @@
 import type { ThinkingStep } from "@/lib/thinkingTrace";
 import type { Task } from "@/lib/api";
+import { randomId } from "@/lib/randomId";
 
 export type HubLogItem = {
   id: string;
@@ -62,13 +63,14 @@ export function sessionTitleFromLogs(logs: HubLogItem[]): string {
 }
 
 export function loadHubSessions(scope = "guest"): HubSession[] {
+  const deleted = loadDeletedSessionIds(scope);
   try {
     const raw = localStorage.getItem(storageKey(scope));
     if (!raw) return [];
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return [];
     return data
-      .filter((s) => s && typeof s.id === "string" && Array.isArray(s.logs))
+      .filter((s) => s && typeof s.id === "string" && Array.isArray(s.logs) && !deleted.has(String(s.id)))
       .map((s) => ({
         id: String(s.id),
         title: String(s.title || "新对话"),
@@ -83,7 +85,9 @@ export function loadHubSessions(scope = "guest"): HubSession[] {
 }
 
 export function saveHubSessions(sessions: HubSession[], scope = "guest"): void {
+  const deleted = loadDeletedSessionIds(scope);
   const trimmed = sessions
+    .filter((s) => !deleted.has(s.id))
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_SESSIONS);
   localStorage.setItem(storageKey(scope), JSON.stringify(trimmed));
@@ -104,7 +108,7 @@ export function replaceSessionId(sessions: HubSession[], oldId: string, newId: s
 
 export function createHubSession(id?: string): HubSession {
   const now = Date.now();
-  return { id: id || crypto.randomUUID(), title: "新对话", createdAt: now, updatedAt: now, logs: [] };
+  return { id: id || randomId(), title: "新对话", createdAt: now, updatedAt: now, logs: [] };
 }
 
 export function serverSessionToHub(s: { session_id: string; title: string; updated_at?: string; created_at?: string }): HubSession {

@@ -27,14 +27,17 @@ INTENT_SYSTEM = f"""你是灵枢 Agent 的「意图脑」。像一名数字助�
 - action_mode=execute：需要动手（应用、文件、浏览器、键鼠、虚拟屏等）
   - 必须在 suggested_tools 列出拟用工具链（按顺序），在 tool_params 为每个工具写出完整 params
   - 拆分语义：type_text / notepad_type_save 的 text 仅是应用内要键入的正文（如「你好」），不要把「保存」「命名为」「关闭」等指令写进 text
-  - 保存文件名用 filename（如 test1 或 test1.txt）；关闭窗口用 close_app(name=应用名，如 notepad)，不要用臆造的中文窗口标题
-  - 记事本「打开+输入+保存」优先建议 notepad_type_save 一步完成，再按需 close_app
-  - 微信找人发消息（默认已登录）：从用户原话理解完整联系人姓名与消息正文，写入 wechat_send_message(contact=, message=)；勿截断、勿猜错；仅输入不发送则 send=false
+  - 保存文件名用 filename（如 test1 或 test1.txt）；关闭窗口默认由 notepad_type_save(close=true) 完成，勿再单独 close_app
+  - 记事本「写入+打开+保存+关闭」一步：notepad_type_save(text=正文, filename=…)；内容已写盘，无需粘贴
+  - 微信找人发消息（默认已登录）：从用户原话理解完整联系人姓名与消息正文，**只调用** wechat_send_message(contact=, message=)；勿先 open_app；勿截断；仅输入不发送则 send=false
+  - 搜索并下载图片：search_and_download_image(query=…)；用户明确要「在浏览器里搜」时 open_browser=true
+  - 简单 Word/Excel/PPT：generate_document(path, format, content/rows/slides)
+  - 复杂版式、海报、图表、精细排版：run_document_script(code=Python, output_path=…)，代码必须 OUTPUT_PATH.save / 写入 OUTPUT_PATH
 - user_wants=both：action_mode=execute；suggested_tools 按「取证(returns_data) → 写入/桌面 action」顺序列出
   - tool_params 可写取证类参数（如 get_weather.location、days）；正文类字段（text/content）**若尚未写好则不要填**，勿写「执行时再生成」「根据 output 自动合成」等说明——留给执行脑/内容合成脑
 - 用户可能在追问上一轮结果（如「保存在哪」「刚才做了什么」）——结合近期对话与 [上轮任务] 中的 steps/output 作答，用 action_mode=answer
 - 多轮桌面操作：后续指令（如「再输入…」「找某人」）仍须重新观察界面，勿在 notes 里假定应用仍打开
-- 微信/QQ/钉钉等需登录的应用：不代替用户登录；若未登录则 action_mode=answer 提示用户先自行登录
+- 微信/钉钉等需登录的应用：不代替用户登录；若未登录则 action_mode=answer 提示用户先自行登录
 - 不要假设某个具体场景；按目标选工具组合
 
 {_TOOLS_HINT}
@@ -75,7 +78,7 @@ risk_level: L0 只读, L1 常规, L2 需用户点确认, L3 禁止
 3. returns_data=false 的工具（web_search/open_url 等）只产生副作用（开窗口），不能代替「把答案告诉用户」
 4. 没有一步到位的工具时，可迂回：浏览器 → gui_agent 读屏操作 → write_file / generate_document → 把路径/内容汇总给用户
 5. 相对路径默认保存到用户「默认保存路径」；用户对话中指定了其他路径时从其指定；工作区外须 risk_level=L2 且 requires_confirm=true
-6. Word/Excel/PPT：优先 generate_document；纯文本/CSV/MD 可用 write_file
+6. Word/Excel/PPT/海报：简单用 generate_document；复杂用 run_document_script（LLM 写 Python，沙箱执行，写入 OUTPUT_PATH）
 7. 步骤尽量少、可解释；每步 description 写清楚「对用户做了什么」
 8. 纯问答且无需取证 → steps 留空
 9. 需要可向用户报告的交付物时，优先 returns_data=true 或 output 含 path/content 等字段的工具
@@ -96,7 +99,7 @@ CODE_ASSIST_SYSTEM = """你是灵枢 Code 编程 Agent。用户在本地打开�
 {"reply": "给用户的说明（中文，简洁）", "edits": [{"path": "相对路径", "content": "该文件修改后的完整内容"}]}
 
 规则：
-- path 必须是项目内已有文件的相对路径（与项目文件列表一致）
+- path 使用相对路径（与项目文件列表一致）；可创建新文件（如 src/utils.ts），父目录不存在时由前端自动创建
 - content 必须是修改后的完整文件内容，不是 diff 片段
 - 只修改任务需要的文件；无需改文件时 edits 为空数组 []
 - 若缺少某文件全文，在 reply 中说明需要用户打开该文件或提供更具体路径

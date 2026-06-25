@@ -204,9 +204,11 @@ async def ws_virtual_screen_live(websocket: WebSocket, token: str | None = None)
                     pass
                 continue
 
-            payload = await VirtualScreenSession.tick()
+            payload = VirtualScreenSession.get_last_payload()
             if payload:
                 await websocket.send_json(payload)
+            else:
+                await websocket.send_json({"type": "pointer", "tracking": False})
             await asyncio.sleep(0.03)
     except WebSocketDisconnect:
         pass

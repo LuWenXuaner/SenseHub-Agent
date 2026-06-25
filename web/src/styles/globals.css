@@ -508,6 +508,7 @@ body {
 .mimo-header {
   border-bottom: 1px solid var(--mimo-border);
   background: color-mix(in srgb, var(--mimo-bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
@@ -1470,6 +1471,11 @@ body {
   overflow: visible;
 }
 
+.mimo-studio-model-menu-embedded {
+  @apply w-full py-0;
+  overflow: visible;
+}
+
 .mimo-studio-model-group-row {
   position: relative;
 }
@@ -1484,6 +1490,10 @@ body {
   border-color: var(--mimo-border);
   background: #ffffff;
   max-height: min(24rem, 70vh);
+}
+
+.mimo-studio-model-flyout-left {
+  @apply left-auto right-full mr-1.5 ml-0;
 }
 
 .mimo-studio-model-flyout-title {
@@ -2534,6 +2544,197 @@ a.mimo-docs-tab.router-link-active {
 .dark .mimo-invite-modal {
   background: var(--mimo-surface);
   border-color: var(--mimo-border);
+}
+
+/* —— 灵枢 Code Agent 对话区 —— */
+.code-agent-panel {
+  border-left: 1px solid var(--mimo-border);
+  background: linear-gradient(180deg, #fcfbfa 0%, #f4f2ef 100%);
+}
+
+.code-agent-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--mimo-border) 85%, transparent);
+  background: color-mix(in srgb, #ffffff 72%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.code-agent-header-icon {
+  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg;
+  color: var(--mimo-accent);
+  background: linear-gradient(145deg, #eef6ff 0%, #e4f0fc 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 2px rgba(56, 148, 220, 0.1);
+}
+
+.code-agent-icon-btn {
+  @apply inline-flex h-7 w-7 items-center justify-center rounded-lg text-mimo-muted transition;
+}
+
+.code-agent-icon-btn:hover {
+  background: color-mix(in srgb, var(--mimo-warm) 80%, #ffffff);
+  color: var(--mimo-text);
+}
+
+.code-agent-chat-scroll {
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(99, 102, 241, 0.05), transparent 70%),
+    radial-gradient(ellipse 70% 40% at 100% 100%, rgba(56, 148, 220, 0.04), transparent 65%);
+}
+
+.code-agent-empty {
+  @apply rounded-2xl px-4 py-7 text-center;
+  border: 1px dashed color-mix(in srgb, var(--mimo-border) 90%, transparent);
+  background: color-mix(in srgb, #ffffff 78%, transparent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.code-agent-empty-icon {
+  @apply mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl;
+  color: var(--mimo-accent);
+  background: linear-gradient(145deg, #f0f7ff 0%, #e6f1fb 100%);
+  box-shadow: 0 2px 6px rgba(56, 148, 220, 0.1);
+}
+
+.code-agent-chat-list {
+  @apply flex flex-col;
+}
+
+.code-agent-chat-row {
+  @apply flex items-start gap-2;
+  margin-bottom: 0.85rem;
+}
+
+.code-agent-chat-row-continued {
+  margin-bottom: 0.45rem;
+}
+
+.code-agent-chat-row-user {
+  @apply flex-row-reverse;
+}
+
+.code-agent-avatar .mimo-studio-chat-avatar {
+  width: 28px;
+  height: 28px;
+}
+
+.code-agent-avatar .mimo-studio-chat-avatar-slot {
+  width: 28px;
+}
+
+.code-agent-bubble {
+  @apply min-w-0 max-w-[calc(100%-2.25rem)] rounded-2xl text-[13px];
+  line-height: 1.7;
+}
+
+.code-agent-bubble-user {
+  @apply px-3 py-2;
+  background: linear-gradient(180deg, #e8f4ff 0%, #deecfa 100%);
+  color: var(--mimo-text);
+  box-shadow: 0 2px 7px rgba(56, 148, 220, 0.11), 0 1px 2px rgba(56, 148, 220, 0.06);
+}
+
+.code-agent-bubble-assistant {
+  @apply px-3 py-2.5;
+  background: linear-gradient(180deg, #fffefb 0%, #f7f5f1 100%);
+  color: var(--mimo-text);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.code-agent-bubble-assistant .chat-markdown-studio {
+  @apply text-[13px] leading-[1.75];
+}
+
+.code-agent-notice {
+  background: color-mix(in srgb, var(--mimo-accent) 6%, #ffffff);
+}
+
+.code-agent-compose {
+  @apply shrink-0 border-t p-3;
+  border-color: color-mix(in srgb, var(--mimo-border) 85%, transparent);
+  background: color-mix(in srgb, #ffffff 55%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.code-agent-input-wrap {
+  @apply relative rounded-2xl border;
+  border-color: color-mix(in srgb, var(--mimo-border) 90%, transparent);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.code-agent-input-wrap:focus-within {
+  border-color: color-mix(in srgb, var(--mimo-accent) 35%, var(--mimo-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mimo-accent) 12%, transparent);
+}
+
+.code-agent-input {
+  @apply w-full resize-none bg-transparent px-3.5 py-2.5 pr-12 text-[13px] leading-[1.65] outline-none;
+  color: var(--mimo-text);
+}
+
+.code-agent-input::placeholder {
+  color: var(--mimo-muted);
+}
+
+.code-agent-send-btn {
+  @apply absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-white transition disabled:opacity-35;
+  background: linear-gradient(180deg, #2f2f2f 0%, #111111 100%);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+}
+
+.code-agent-send-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.22);
+}
+
+.code-agent-send-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.dark .code-agent-panel {
+  background: linear-gradient(180deg, var(--mimo-bg) 0%, color-mix(in srgb, var(--mimo-bg) 88%, #000000) 100%);
+}
+
+.dark .code-agent-header {
+  background: color-mix(in srgb, var(--mimo-surface) 88%, transparent);
+}
+
+.dark .code-agent-header-icon {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--mimo-accent) 18%, var(--mimo-surface)) 0%, var(--mimo-surface) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .code-agent-empty {
+  background: color-mix(in srgb, var(--mimo-surface) 85%, transparent);
+  border-color: var(--mimo-border);
+}
+
+.dark .code-agent-empty-icon {
+  background: color-mix(in srgb, var(--mimo-accent) 14%, var(--mimo-surface));
+}
+
+.dark .code-agent-bubble-user {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mimo-accent) 16%, var(--mimo-surface)) 0%, var(--mimo-surface) 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dark .code-agent-bubble-assistant {
+  background: linear-gradient(180deg, var(--mimo-surface) 0%, color-mix(in srgb, var(--mimo-surface) 92%, #000000) 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.dark .code-agent-compose {
+  background: color-mix(in srgb, var(--mimo-surface) 70%, transparent);
+}
+
+.dark .code-agent-input-wrap {
+  background: var(--mimo-surface);
+  border-color: var(--mimo-border);
+}
+
+.dark .code-agent-send-btn {
+  background: linear-gradient(180deg, #4b5563 0%, #1f2937 100%);
 }
 
 /* —— 灵枢 Console 对话区 —— */

@@ -1,0 +1,33 @@
+# 感知 / Console 视频（默认每 5 帧推理一次）
+perception:
+  preview_interval_ms: 100
+  detect_every_n_frames: 5
+  gesture_every_n_frames: 5
+  gesture_only_if_person: true
+  gesture_backend: mediapipe
+  jpeg_quality: 55
+  camera_mirror: true
+  virtual_pointer_every_n_frames: 1
+  virtual_pointer_interval_sec: 0.03
+  pointer_smooth_alpha: 0.55
+  pointer_track_alpha: 0.65
+  pointer_deadzone_px: 0
+  virtual_track_hold_frames: 3
+  virtual_pinch_threshold: 0.072
+  virtual_pinch_confirm_frames: 1
+  virtual_click_cooldown_sec: 0.35
+  # 手势识别（收紧阈值 + 连续帧确认，减少误报）
+  gesture_min_confidence: 0.62
+  gesture_confirm_frames: 3
+  gesture_hold_sec: 1.2
+  wave_min_span: 0.18
+  wave_min_reversals: 4
+  nod_min_y_range: 0.034
+  nod_max_y_range: 0.11
+  nod_min_reversals: 4
+  shake_min_x_range: 0.048
+  shake_max_x_range: 0.12
+  shake_min_reversals: 4
+  hand_raise_min_delta: 0.09
+  # 虚拟屏：direct 按摄像头画面比例映射到主屏；homography 需九点校准
+  virtual_screen_mapping: direct

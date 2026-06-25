@@ -1,8 +1,9 @@
-# 灵枢 Agent 环境预配置指南（SETUP）
+# 灵枢 SenseHub 环境部署与预配置指南（SETUP）
 
-开发开始前，请在本机完成以下安装与配置。完成后复制模板文件、填写路径与 API Key，再运行 [`SMOKE_TESTS.md`](SMOKE_TESTS.md) 中的 Phase 0 验收。
+> **文档版本**：v1.0（商业化交付版）  
+> **适用对象**：运维人员、交付工程师、本地开发环境搭建
 
-**协作模式**：你提前装好环境并填好配置；开发时 Agent 只读取 `config/local.env` 与 `config/paths.yaml`，不硬编码路径、不替你申请 API Key。
+部署或开发前，请在本机完成下列软件安装与配置。配置完成后运行 [SMOKE_TESTS.md](SMOKE_TESTS.md) 中的验收项，确保服务可正常启动。
 
 ---
 

@@ -80,13 +80,19 @@ def apply_sandbox_confirm_gates(plan: ExecutionPlan) -> ExecutionPlan:
     """工作区外文件写入自动升级为 L2 待确认（通用沙箱，非个案规则）."""
     from sensehub.security.sandbox import path_needs_confirm
 
-    write_tools = {"write_file", "copy_file"}
+    write_tools = {"write_file", "copy_file", "generate_document", "run_document_script"}
     steps = []
     changed = False
+    path_keys = {
+        "write_file": "path",
+        "copy_file": "dst",
+        "generate_document": "path",
+        "run_document_script": "output_path",
+    }
     for step in plan.steps:
         if step.tool in write_tools:
-            path_key = "path" if step.tool == "write_file" else "dst"
-            target = str(step.params.get(path_key, ""))
+            path_key = path_keys.get(step.tool, "path")
+            target = str(step.params.get(path_key) or step.params.get("path") or "")
             if target and path_needs_confirm(target, "write"):
                 if step.risk_level != "L2" or not step.requires_confirm:
                     changed = True

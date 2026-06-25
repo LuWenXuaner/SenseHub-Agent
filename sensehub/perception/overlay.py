@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from queue import Empty, Queue
+from threading import Event
 
 _OVERLAY_SIZE = 72
 
@@ -18,6 +19,7 @@ class VirtualMouseOverlay:
         self._thread: threading.Thread | None = None
         self._queue: Queue = Queue()
         self._running = False
+        self._ready = Event()
         self._root: tk.Tk | None = None
         self._canvas: tk.Canvas | None = None
         self._cursor_id: int | None = None
@@ -37,15 +39,22 @@ class VirtualMouseOverlay:
 
     def start(self) -> None:
         if self._running:
+            self._ready.wait(timeout=2.0)
             return
+        self._ready.clear()
         self._running = True
         self._thread = threading.Thread(target=self._run_tk, daemon=True)
         self._thread.start()
 
+    def wait_ready(self, timeout: float = 2.0) -> bool:
+        return self._ready.wait(timeout=timeout)
+
     def stop(self) -> None:
         if not self._running:
+            self._ready.clear()
             return
         self._running = False
+        self._ready.clear()
         self._queue.put(("stop",))
 
     def update(self, x: float, y: float, *, clicked: bool = False) -> None:
@@ -98,8 +107,10 @@ class VirtualMouseOverlay:
 
         root.deiconify()
         self._make_click_through(root)
+        self._ready.set()
         self._pump()
         root.mainloop()
+        self._ready.clear()
 
     def _make_click_through(self, root: tk.Tk) -> None:
         try:

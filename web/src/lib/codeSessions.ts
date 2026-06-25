@@ -1,3 +1,5 @@
+import { randomId } from "@/lib/randomId";
+
 export type CodeMessage = { role: "user" | "assistant"; content: string };
 
 export type CodeSession = {
@@ -58,5 +60,5 @@ export function upsertCodeSession(sessions: CodeSession[], session: CodeSession)
 
 export function createCodeSession(id?: string): CodeSession {
   const now = Date.now();
-  return { id: id || crypto.randomUUID(), title: "新任务", createdAt: now, updatedAt: now, messages: [] };
+  return { id: id || randomId(), title: "新任务", createdAt: now, updatedAt: now, messages: [] };
 }

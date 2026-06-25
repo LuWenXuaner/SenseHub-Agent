@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { Ear, MessageSquarePlus, Mic, Monitor, Send, Square, Waves } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Ear, Mic, Monitor, Send, Square, Waves } from "lucide-react";
 import { api, getToken, HubCommandResult, Task, VoiceCommandResult } from "@/lib/api";
 import {
   buildChatHistory,
@@ -10,8 +10,12 @@ import {
   mergeThinkingSteps,
   resolveDisplayText,
   taskFromResponse,
+  applyAgentStreamEvent,
+  streamLogPatchFromAgentEvent,
+  renumberThinkingSteps,
 } from "@/lib/thinkingTrace";
 import { clearJpegCanvas, drawJpegToCanvas } from "@/lib/jpegPreview";
+import { drawPerceptionOverlay } from "@/lib/perceptionOverlay";
 import { useAuth } from "@/context/AuthContext";
 import { useClawSessionBridge } from "@/context/ClawSessionContext";
 import { useLocale } from "@/context/LocaleContext";
@@ -20,9 +24,13 @@ import { useCameraStream } from "@/hooks/useCameraStream";
 import { openMicStream, startHoldRecording } from "@/lib/wakeWord";
 import { speakExecutionAck, speakReply } from "@/lib/speakFeedback";
 import { releaseWebFocus } from "@/lib/releaseWebFocus";
+
+const IM_DESKTOP_TOOLS = new Set(["wechat_send_message"]);
 import { ConsoleBrainRouting } from "@/components/console/ConsoleBrainRouting";
 import { ConsoleSavePathPicker } from "@/components/hub/ConsoleSavePathPicker";
 import { HubChatLog } from "@/components/hub/HubChatLog";
+import { HubVirtualScreenMenu } from "@/components/hub/HubVirtualScreenMenu";
+import { HubVirtualScreenCalibModal } from "@/components/hub/HubVirtualScreenCalibModal";
 import {
   createHubSession,
   loadHubSessions,
@@ -93,28 +101,15 @@ function ToggleButton({
   );
 }
 
-function NewSessionButton({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      title={label}
-      onClick={onClick}
-      className="rounded-lg border border-border bg-surface px-2 py-1 text-xs text-text-secondary transition hover:border-primary/40 hover:text-primary"
-    >
-      <MessageSquarePlus size={12} className="mr-1 inline" aria-hidden />
-      {label}
-    </button>
-  );
-}
-
 export function HubPage() {
   const { license, refreshLicense, user } = useAuth();
   const scope = userStorageScope(user?.username);
   const { t } = useLocale();
   const { setApi: setClawSessionApi } = useClawSessionBridge();
   const c = t.claw;
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState<HubSession[]>([]);
+  const [sessionsReady, setSessionsReady] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [text, setText] = useState("");
@@ -122,7 +117,13 @@ export function HubPage() {
   const [stopping, setStopping] = useState(false);
   const [stoppingLogId, setStoppingLogId] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
-  const [virtual, setVirtual] = useState({ active: false, calibrated: false, show_keyboard: false });
+  const [virtual, setVirtual] = useState({
+    active: false,
+    calibrated: false,
+    show_keyboard: false,
+    automation_suspended: false,
+  });
+  const [virtualCalibOpen, setVirtualCalibOpen] = useState(false);
   const [wakeListening, setWakeListening] = useState(false);
   const [wakeHint, setWakeHint] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -135,12 +136,13 @@ export function HubPage() {
   const abortRef = useRef<AbortController | null>(null);
   const pollAbortRef = useRef(false);
   const activeRunRef = useRef<{ logId: string; taskId?: string; sessionId: string } | null>(null);
+  const agentWsRef = useRef<WebSocket | null>(null);
   const stoppedRunsRef = useRef<Set<string>>(new Set());
   const userTouchedSessionRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
   const busySessionIdRef = useRef<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
-  const maxTier = license?.tier === "max";
+  const virtualScreenEnabled = Boolean(license?.features?.virtual_screen);
   const ttsEnabled = Boolean(license?.features?.tts_feedback);
   const isCurrentSessionBusy = busySessionId === sessionId;
 
@@ -155,6 +157,8 @@ export function HubPage() {
   }, []);
 
   const persistSession = useCallback((nextLogs: LogItem[], sid: string) => {
+    const deleted = loadDeletedSessionIds(scope);
+    if (deleted.has(sid)) return;
     setSessions((prev) => {
       const existing = prev.find((s) => s.id === sid);
       const updated: HubSession = {
@@ -164,7 +168,10 @@ export function HubPage() {
         updatedAt: Date.now(),
         logs: nextLogs,
       };
-      const next = upsertHubSession(prev, updated);
+      const next = upsertHubSession(
+        prev.filter((s) => !deleted.has(s.id)),
+        updated
+      );
       saveHubSessions(next, scope);
       return next;
     });
@@ -172,35 +179,44 @@ export function HubPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const token = getToken();
+    if (token && !user) {
+      setSessionsReady(false);
+      return;
+    }
+
     const deleted = loadDeletedSessionIds(scope);
-    const local = loadHubSessions(scope).filter((s) => !deleted.has(s.id));
+    const local = loadHubSessions(scope);
     const bootstrap = local[0] ?? createHubSession();
     const initialList = local.length ? local : [bootstrap];
     setSessions(initialList);
     setSessionId(bootstrap.id);
     setLogs(bootstrap.logs);
+    setSessionsReady(true);
+
+    if (!token) return;
 
     void (async () => {
       try {
         const res = await api.listSessions("hub");
         if (cancelled || !res.sessions?.length) return;
-        const deleted = loadDeletedSessionIds(scope);
+        const deletedNow = loadDeletedSessionIds(scope);
         setSessions((prev) => {
           const mapped = res.sessions
-            .filter((s) => !deleted.has(s.session_id))
+            .filter((s) => !deletedNow.has(s.session_id))
             .map((s) => {
               const localMatch = prev.find((l) => l.id === s.session_id);
               return localMatch ?? serverSessionToHub(s);
             });
           const serverIds = new Set(mapped.map((s) => s.id));
-          const localOnly = prev.filter((l) => !serverIds.has(l.id) && !deleted.has(l.id));
+          const localOnly = prev.filter((l) => !serverIds.has(l.id) && !deletedNow.has(l.id));
           const merged = [...mapped, ...localOnly].sort((a, b) => b.updatedAt - a.updatedAt);
           saveHubSessions(merged, scope);
           return merged;
         });
         if (userTouchedSessionRef.current || cancelled) return;
         const mapped = res.sessions
-          .filter((s) => !deleted.has(s.session_id))
+          .filter((s) => !deletedNow.has(s.session_id))
           .map((s) => serverSessionToHub(s));
         const active = mapped.sort((a, b) => b.updatedAt - a.updatedAt)[0];
         if (!active) return;
@@ -222,7 +238,7 @@ export function HubPage() {
     return () => {
       cancelled = true;
     };
-  }, [scope]);
+  }, [scope, user]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -230,19 +246,6 @@ export function HubPage() {
     }, 400);
     return () => window.clearTimeout(timer);
   }, [logs, sessionId, persistSession]);
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(
-      `${proto}://${window.location.host}/ws/agent?token=${encodeURIComponent(token)}&session_id=${encodeURIComponent(sessionId)}`
-    );
-    ws.onmessage = () => {
-      /* 实时事件由 mergeThinkingSteps / task WS 补充 */
-    };
-    return () => ws.close();
-  }, [sessionId]);
 
   const patchLogsForSession = useCallback(
     (sid: string, mutator: (logs: LogItem[]) => LogItem[]) => {
@@ -268,9 +271,70 @@ export function HubPage() {
     [scope]
   );
 
-  const patchLog = (id: string, patch: Partial<LogItem>) => {
-    setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  };
+  const patchLog = useCallback((id: string, patch: Partial<LogItem> | ((prev: LogItem) => Partial<LogItem>)) => {
+    setLogs((prev) =>
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        const nextPatch = typeof patch === "function" ? patch(l) : patch;
+        return { ...l, ...nextPatch };
+      })
+    );
+  }, []);
+
+  const patchActiveRunLog = useCallback(
+    (patch: Partial<LogItem> | ((prev: LogItem) => Partial<LogItem>)) => {
+      const active = activeRunRef.current;
+      if (!active?.logId) return;
+      patchLogsForSession(active.sessionId, (prev) =>
+        prev.map((l) => {
+          if (l.id !== active.logId) return l;
+          const nextPatch = typeof patch === "function" ? patch(l) : patch;
+          return { ...l, ...nextPatch };
+        })
+      );
+    },
+    [patchLogsForSession]
+  );
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(
+      `${proto}://${window.location.host}/ws/agent?token=${encodeURIComponent(token)}`
+    );
+    agentWsRef.current = ws;
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data) as Record<string, unknown>;
+        const active = activeRunRef.current;
+        if (!active?.logId) return;
+        const eventSid = String(data.session_id || "");
+        if (eventSid && active.sessionId && eventSid !== active.sessionId) {
+          activeRunRef.current = { ...active, sessionId: eventSid };
+        }
+        const evType = String(data.type || "");
+        const evTool = String(data.tool || "");
+        if (evType === "tool_start" && IM_DESKTOP_TOOLS.has(evTool)) {
+          releaseWebFocus();
+        }
+        patchActiveRunLog((log) => {
+          const stream = streamLogPatchFromAgentEvent(data, log);
+          if (stream.status === "done") {
+            if (busySessionIdRef.current) setBusySession(null);
+            activeRunRef.current = null;
+          }
+          return stream;
+        });
+      } catch {
+        // ignore
+      }
+    };
+    return () => {
+      agentWsRef.current = null;
+      ws.close();
+    };
+  }, [patchActiveRunLog]);
 
   const applyTaskToLog = useCallback((task: Task, logId?: string) => {
     if (stoppedRunsRef.current.has(task.task_id)) return;
@@ -487,14 +551,14 @@ export function HubPage() {
 
   useEffect(() => {
     setClawSessionApi({
-      sessions,
+      sessions: sessionsReady ? sessions : [],
       sessionId,
       switchSession,
       deleteSession,
       newSession: () => void startNewSession(),
     });
     return () => setClawSessionApi(null);
-  }, [sessions, sessionId, switchSession, deleteSession, startNewSession, setClawSessionApi]);
+  }, [sessions, sessionsReady, sessionId, switchSession, deleteSession, startNewSession, setClawSessionApi]);
 
   const pushLog = (role: LogItem["role"], textValue: string, extra?: Partial<LogItem>) => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
@@ -512,9 +576,28 @@ export function HubPage() {
     }
   }, [logs]);
 
-  const onFrame = useCallback((payload: { image: string }) => {
-    drawJpegToCanvas(canvasRef.current, payload.image);
-  }, []);
+  const onFrame = useCallback(
+    (payload: {
+      image: string;
+      detections?: { x1: number; y1: number; x2: number; y2: number; confidence: number; label?: string }[];
+      gesture?: Record<string, unknown>;
+      person_count?: number;
+      hands?: {
+        hand_box?: { x1: number; y1: number; x2: number; y2: number };
+        index_tip?: { x: number; y: number };
+        tracking?: boolean;
+        pinch?: boolean;
+      }[];
+    }) => {
+      drawPerceptionOverlay(canvasRef.current, payload.image, {
+        detections: payload.detections,
+        gesture: payload.gesture as { type?: string; description?: string },
+        personCount: payload.person_count,
+        hands: payload.hands,
+      });
+    },
+    []
+  );
 
   const { streaming, loading: camLoading, error: camError, start: startCam, stop: stopCam } = useCameraStream(onFrame);
 
@@ -525,6 +608,9 @@ export function HubPage() {
   const handleStopCam = () => {
     clearJpegCanvas(canvasRef.current);
     void stopCam();
+    if (virtual.active) {
+      pushLog("system", c.camPreviewOffVirtualOn);
+    }
   };
 
   const refreshVirtual = useCallback(() => {
@@ -532,20 +618,32 @@ export function HubPage() {
   }, []);
 
   useEffect(() => {
+    void refreshLicense();
     refreshVirtual();
     const timer = window.setInterval(refreshVirtual, 3000);
     return () => {
       window.clearInterval(timer);
-      stopCam().catch(() => {});
       virtualWsRef.current?.close();
     };
-  }, [refreshVirtual, stopCam]);
+  }, [refreshVirtual, refreshLicense]);
+
+  useEffect(() => {
+    if (searchParams.get("calibrate") !== "virtual") return;
+    setVirtualCalibOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("calibrate");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const token = getToken();
     if (!token) return;
+    let cancelled = false;
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${proto}://${window.location.host}/ws/tasks?token=${encodeURIComponent(token)}`);
+    ws.onopen = () => {
+      if (cancelled) ws.close();
+    };
     ws.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
@@ -564,31 +662,49 @@ export function HubPage() {
         // ignore
       }
     };
-    return () => ws.close();
+    return () => {
+      cancelled = true;
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
   }, [applyTaskToLog]);
 
   useEffect(() => {
-    if (!virtual.active || !maxTier) {
+    if (!virtual.active || !virtualScreenEnabled) {
       virtualWsRef.current?.close();
       virtualWsRef.current = null;
       return;
     }
     const token = getToken();
     if (!token) return;
+    let cancelled = false;
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${proto}://${window.location.host}/ws/virtual-screen/live?token=${encodeURIComponent(token)}`);
     virtualWsRef.current = ws;
+    ws.onopen = () => {
+      if (cancelled) ws.close();
+    };
     ws.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
-        if (data.type === "pointer" && data.clicked) pushLog("system", "空中点击");
+        if (data.type === "pointer") {
+          if (data.clicked) pushLog("system", "空中点击");
+          if (data.suspended) {
+            setVirtual((v) => ({ ...v, automation_suspended: true }));
+          } else if (data.tracking || data.screen_x != null) {
+            setVirtual((v) => ({ ...v, automation_suspended: false }));
+          }
+        }
         if (data.type === "status") setVirtual((v) => ({ ...v, ...data }));
       } catch {
         // ignore
       }
     };
-    return () => ws.close();
-  }, [maxTier, virtual.active]);
+    return () => {
+      cancelled = true;
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+      if (virtualWsRef.current === ws) virtualWsRef.current = null;
+    };
+  }, [virtualScreenEnabled, virtual.active]);
 
   const submit = async (autonomous = false, explicitText?: string, fromVoice = false) => {
     const cmd = (explicitText ?? text).trim();
@@ -620,7 +736,7 @@ export function HubPage() {
     const pendingId = pushLog("system", "", {
       status: "thinking",
       thinking: [],
-      thinkingOpen: true,
+      thinkingOpen: false,
     });
     activeRunRef.current = { logId: pendingId, sessionId: runSessionId };
 
@@ -643,33 +759,40 @@ export function HubPage() {
       const task = taskFromResponse(res);
       const isWaitConfirm = task?.status === "wait_confirm";
       const terminal = isTerminalTask(task);
-      const isPendingTask = Boolean(res.task_id) && !terminal && !res.reply && !isWaitConfirm;
+      const isPendingTask =
+        Boolean(res.task_id) && !terminal && !isWaitConfirm && !(res.reply || "").trim();
       const display = isWaitConfirm
         ? "该操作需你确认后才会继续执行"
         : resolveDisplayText(res, task, isPendingTask);
 
       if (res.task_id) activeRunRef.current = { logId: pendingId, taskId: res.task_id, sessionId: runSessionId };
 
-      patchLog(pendingId, {
-        text: display,
-        thinking: mergeThinkingSteps(res, task),
-        thinkingOpen: isPendingTask || isWaitConfirm,
-        status: isWaitConfirm
-          ? "done"
-          : isPendingTask
-            ? "thinking"
-            : task?.status === "failed" || task?.status === "cancelled"
-              ? "error"
-              : "done",
-        taskId: res.task_id || undefined,
-        confirmTask: isWaitConfirm ? task : undefined,
-        taskSnapshot: task && isTerminalTask(task) ? task : undefined,
+      patchLog(pendingId, (log) => {
+        const alreadyDone = log.status === "done" && Boolean(log.text?.trim());
+        const serverThinking = renumberThinkingSteps(mergeThinkingSteps(res, task));
+        return {
+          text: alreadyDone ? log.text : display,
+          thinking: alreadyDone ? renumberThinkingSteps(log.thinking || serverThinking) : serverThinking,
+          thinkingOpen: false,
+          status: isWaitConfirm
+            ? "done"
+            : isPendingTask
+              ? "thinking"
+              : alreadyDone
+                ? "done"
+                : task?.status === "failed" || task?.status === "cancelled"
+                  ? "error"
+                  : "done",
+          taskId: res.task_id || undefined,
+          confirmTask: isWaitConfirm ? task : undefined,
+          taskSnapshot: task && isTerminalTask(task) ? task : undefined,
+        };
       });
 
       const action =
         res.action || (res.task_id ? "execute" : "matched" in res && res.matched === false ? "error" : "answer");
       const isDesktopExecute = action === "execute" || action === "task" || action === "autonomous";
-      if (isDesktopExecute) {
+      if (isDesktopExecute && !isPendingTask) {
         requestAnimationFrame(() => releaseWebFocus());
       }
 
@@ -698,9 +821,8 @@ export function HubPage() {
       if (res.task_id) await refreshLicense();
 
       if (shouldOpenVirtualScreenPage(res as HubCommandResult)) {
-        pushLog("system", "已打开虚拟屏设置，完成校准后关闭该页即可返回。");
-        const win = window.open("/perception/virtual-screen?from=hub", "_blank", "noopener,noreferrer,width=1180,height=760");
-        if (!win) navigate("/perception/virtual-screen?from=hub");
+        pushLog("system", "请完成虚拟屏校准。");
+        setVirtualCalibOpen(true);
       }
     } catch (e) {
       if (controller.signal.aborted || stoppedRunsRef.current.has(pendingId)) {
@@ -785,11 +907,18 @@ export function HubPage() {
           <Waves size={12} aria-hidden />
           {c.wake}{wakeActive ? c.wakeOn : c.wakeOff}
         </StatusPill>
-        {maxTier && (
-          <StatusPill active={virtual.active}>
-            {c.virtual}{virtual.active ? c.virtualOn : c.virtualOff}
-          </StatusPill>
-        )}
+        <HubVirtualScreenMenu
+          featureEnabled={virtualScreenEnabled}
+          virtual={virtual}
+          onRefresh={refreshVirtual}
+          onCalibrate={() => setVirtualCalibOpen(true)}
+          onStartCamera={async () => {
+            if (!streaming) await startCam();
+          }}
+          onStopCamera={() => {
+            if (streaming) void handleStopCam();
+          }}
+        />
         <span className="hidden text-text-secondary sm:inline">
           {c.wakeWord} <code className="text-text-primary">灵枢</code>
           {wakeListening && lastHeard ? ` · ${lastHeard}` : ""}
@@ -798,7 +927,6 @@ export function HubPage() {
         <span className="ml-auto flex flex-wrap items-center gap-2">
           <ConsoleSavePathPicker scope={scope} />
           <ConsoleBrainRouting variant="compact" />
-          <NewSessionButton onClick={() => void startNewSession()} label={c.newSession} />
           <ToggleButton active={wakeListening} onClick={() => setWakeListening((v) => !v)}>
             <Ear size={12} className="mr-1 inline" aria-hidden />
             {wakeListening ? c.closeWake : c.openWake}
@@ -890,6 +1018,14 @@ export function HubPage() {
           </div>
         </section>
       </div>
+      <HubVirtualScreenCalibModal
+        open={virtualCalibOpen}
+        onClose={() => setVirtualCalibOpen(false)}
+        onSaved={refreshVirtual}
+        onStartCamera={() => {
+          if (!streaming) void startCam();
+        }}
+      />
     </div>
   );
 }

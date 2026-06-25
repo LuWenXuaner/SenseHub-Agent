@@ -1,3 +1,5 @@
+import { randomId } from "@/lib/randomId";
+
 export type StudioMessage = {
   role: "user" | "assistant";
   content: string;
@@ -55,7 +57,7 @@ export function saveStudioSessions(sessions: StudioSession[], scope = "guest"): 
 
 export function createStudioSession(id?: string): StudioSession {
   const now = Date.now();
-  return { id: id || crypto.randomUUID(), title: "新对话", createdAt: now, updatedAt: now, messages: [] };
+  return { id: id || randomId(), title: "新对话", createdAt: now, updatedAt: now, messages: [] };
 }
 
 export function upsertStudioSession(sessions: StudioSession[], session: StudioSession): StudioSession[] {

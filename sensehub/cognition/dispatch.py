@@ -173,6 +173,8 @@ async def process_code_assist(
     file_content: str = "",
     context_files: list[dict[str, str]] | None = None,
     history: list[dict[str, Any]] | None = None,
+    model_id: str = "",
+    mode: str = "agent",
 ) -> dict[str, Any]:
     """Code Agent：Code Harness 编排后生成文件修改."""
     raw = user_text.strip()
@@ -181,6 +183,7 @@ async def process_code_assist(
 
     text = normalize_user_text(raw)
     hist = _history_payload(history)
+    harness_mode = mode if mode in ("agent", "plan") else "agent"
     try:
         out = await run_code_harness(
             text,
@@ -190,6 +193,8 @@ async def process_code_assist(
             file_content=file_content,
             context_files=context_files,
             history=hist,
+            model_id=model_id,
+            mode=harness_mode,
         )
     except Exception as exc:
         raise BrainPipelineError(f"Code 助手不可用: {exc}") from exc
@@ -200,6 +205,8 @@ async def process_code_assist(
         "reply": out.reply,
         "edits": out.edits,
         "harness_trace": out.trace_dict(),
+        "model_id": model_id or None,
+        "mode": harness_mode,
     }
 
 
@@ -224,8 +231,14 @@ async def process_user_input(
     agents: list[dict[str, Any]] = []
     hist = _history_payload(history)
 
+    from sensehub.gateway import events as agent_events
+
+    sid = session_id or ""
+    agent_events.emit({"type": "phase", "session_id": sid, "phase": "intent", "status": "running"})
+
     atomic_plan = match_atomic_plan(text)
     if atomic_plan:
+        agent_events.emit({"type": "phase", "session_id": sid, "phase": "intent", "status": "done", "goal": atomic_plan.summary})
         from sensehub.gateway.agent_service import run_plan_agent
 
         intent_raw = {
@@ -279,7 +292,18 @@ async def process_user_input(
         router = LLMRouter()
         intent_raw = await router.chat_json("intent", INTENT_SYSTEM, intent_user)
     except Exception as exc:
+        agent_events.emit({"type": "phase", "session_id": sid, "phase": "intent", "status": "error"})
         raise BrainPipelineError(f"意图脑不可用: {exc}") from exc
+
+    agent_events.emit(
+        {
+            "type": "phase",
+            "session_id": sid,
+            "phase": "intent",
+            "status": "done",
+            "goal": str(intent_raw.get("goal") or text[:80]),
+        }
+    )
 
     agents.append({"role": "intent", "model_role": "intent", **intent_raw})
     intent_raw["_session_id"] = session_id

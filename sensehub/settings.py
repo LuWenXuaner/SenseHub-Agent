@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     models_root: str = Field(default="", alias="MODELS_ROOT")
     sqlite_path: str = Field(default="", alias="SQLITE_PATH")
 
-    api_host: str = Field(default="127.0.0.1", alias="API_HOST")
+    api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8765, alias="API_PORT")
     jwt_secret: str = Field(default="change-me", alias="JWT_SECRET")
     admin_password: str = Field(default="sensehub", alias="ADMIN_PASSWORD")

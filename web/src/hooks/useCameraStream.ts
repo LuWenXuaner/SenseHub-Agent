@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { DetectionBox } from "@/lib/api";
 import {
   ensureCameraStream,
+  forceReleaseCameraStream,
   releaseCameraStream,
   subscribeCameraFrames,
   subscribeCameraStatus,
@@ -11,7 +12,15 @@ type FrameHandler = (payload: {
   image: string;
   detections: DetectionBox[];
   gestures?: Array<Record<string, unknown>>;
+  gesture?: Record<string, unknown>;
+  person_count?: number;
   fps?: number;
+  hands?: Array<{
+    hand_box?: { x1: number; y1: number; x2: number; y2: number };
+    index_tip?: { x: number; y: number };
+    tracking?: boolean;
+    pinch?: boolean;
+  }>;
 }) => void;
 
 export function useCameraStream(onFrame?: FrameHandler) {
@@ -23,9 +32,8 @@ export function useCameraStream(onFrame?: FrameHandler) {
   onFrameRef.current = onFrame;
 
   const stop = useCallback(async () => {
-    if (!subscribedRef.current) return;
     subscribedRef.current = false;
-    releaseCameraStream();
+    await forceReleaseCameraStream();
     setStreaming(false);
   }, []);
 
@@ -55,7 +63,7 @@ export function useCameraStream(onFrame?: FrameHandler) {
       offFrame();
       if (subscribedRef.current) {
         subscribedRef.current = false;
-        releaseCameraStream();
+        void releaseCameraStream();
       }
     };
   }, []);

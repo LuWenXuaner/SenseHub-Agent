@@ -40,7 +40,7 @@ const zh: DocSectionMap = {
     bullets: [
       "支持多轮对话与 system 提示词",
       "支持 temperature、max_tokens 等标准参数",
-      "Pro / Max 档位可用更强规划与多脑协作模型",
+      "Standard / Pro / Max 档位可用更强规划与多模态能力；Max 支持多脑协作",
     ],
     code: `{
   "model": "Qwen/Qwen3-8B",
@@ -72,7 +72,7 @@ const zh: DocSectionMap = {
     bullets: [
       "输入：base64 图片或 URL（视 Provider 支持而定）",
       "适用：截图问答、表格抽取、界面元素描述",
-      "Pro 及以上档位可在 Console 状态栏开启视觉模式",
+      "Standard 及以上档位可在 Console 状态栏开启完整视觉模式",
     ],
     link: { label: "查看模型列表", to: "/models" },
   },
@@ -149,7 +149,7 @@ const zh: DocSectionMap = {
     ],
     bullets: [
       "账户与认证：个人中心可查看灵枢 ID、档位；API Key 请勿泄露或提交至公开仓库。",
-      "积分与兑换：每日签到、邀请好友得积分；可兑换 Lite/Pro/Max 档位与 API 额度。",
+      "积分与兑换：每日签到、邀请好友得积分；可兑换 Lite / Standard / Pro / Max 套餐与 API 额度。",
       "限速说明：各档位有 Token 流控与并发上限，详见模型页与 Token Plan 用量面板。",
       "Code Agent：在 Code 工作台选择本地项目根目录，通过 Agent 对话直接修改文件（需 Chrome/Edge）。",
     ],
@@ -180,7 +180,7 @@ const en: DocSectionMap = {
       "Text generation covers chat, writing, summarization, translation, and code. SenseHub routes Qwen3, DeepSeek-V3, Doubao by brain role (intent / planner / coder).",
       "Chat is dialog-only; Console can plan and execute tools on top of the same models.",
     ],
-    bullets: ["Multi-turn + system prompts", "Standard temperature / max_tokens", "Stronger models on Pro / Max"],
+    bullets: ["Multi-turn + system prompts", "Standard temperature / max_tokens", "Stronger routing on Standard / Pro / Max"],
     link: { label: "Open Chat", to: "/studio" },
   },
   tools: {
@@ -195,7 +195,7 @@ const en: DocSectionMap = {
     paragraphs: [
       "Vision uses Qwen2.5-VL for screenshots, OCR, UI understanding. Enable camera in Console for live frames.",
     ],
-    bullets: ["Base64 or URL images", "Screenshot Q&A & table extract", "Vision toggle in Console status bar (Pro+)"],
+    bullets: ["Base64 or URL images", "Screenshot Q&A & table extract", "Full vision mode from Standard tier upward"],
     link: { label: "Models", to: "/models" },
   },
   image: {
@@ -235,7 +235,7 @@ const en: DocSectionMap = {
     paragraphs: ["Quick FAQ summary—see Contact for more."],
     bullets: [
       "Account: profile & tier in console; never leak API keys.",
-      "Points: check-in, invites, redeem tiers & API packs.",
+      "Points: check-in, invites, redeem Lite / Standard / Pro / Max plans and API packs.",
       "Rate limits: per tier—see Models & Token Plan.",
       "Code Agent: pick a local folder in Code and edit via Agent chat.",
     ],

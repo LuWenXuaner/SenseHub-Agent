@@ -5,7 +5,18 @@ from __future__ import annotations
 from sensehub.models.schemas import PlanStep, StepResult
 
 _UI_VERIFY_TOOLS = frozenset(
-    {"open_app", "focus_window", "list_windows", "active_window", "screenshot", "gui_agent"}
+    {
+        "open_app",
+        "focus_window",
+        "list_windows",
+        "active_window",
+        "screenshot",
+        "gui_agent",
+        "web_search",
+        "open_url",
+        "browser_navigate",
+        "browser_status",
+    }
 )
 _UI_ACTION_TOOLS = frozenset(
     {
@@ -66,5 +77,16 @@ def collect_desktop_issues(steps: list[PlanStep], step_results: list[StepResult]
             count = int(out.get("window_count") or 0)
             if count < 1:
                 issues.append(f"未找到应用「{out.get('opened')}」的窗口")
+        if step.tool in ("notepad_type_save", "save_notepad"):
+            size = int(out.get("file_size") or 0)
+            path = str(out.get("saved_path") or "")
+            if path and size <= 0:
+                issues.append(f"记事本文件为空：{path}")
+            elif step.tool == "notepad_type_save":
+                typed = int(out.get("typed_length") or 0)
+                if typed > 0 and size <= 0:
+                    issues.append("记事本正文未写入磁盘")
+                if not bool(out.get("closed")) and step.params.get("close", True):
+                    issues.append("记事本应关闭但窗口仍打开")
 
     return issues

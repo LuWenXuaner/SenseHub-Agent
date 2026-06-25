@@ -133,6 +133,8 @@ async def code_assist(body: CodeAssistCreate, username: str = Depends(get_curren
             file_content=body.file_content,
             context_files=body.context_files,
             history=[h.model_dump() for h in body.history],
+            model_id=body.model_id,
+            mode=body.mode,
         )
     except BrainPipelineError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -141,6 +143,8 @@ async def code_assist(body: CodeAssistCreate, username: str = Depends(get_curren
         "action": "answer",
         "reply": result.get("reply", ""),
         "edits": result.get("edits") or [],
+        "mode": result.get("mode"),
+        "model_id": result.get("model_id"),
     }
 
 

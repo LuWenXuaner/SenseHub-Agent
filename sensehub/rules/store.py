@@ -21,6 +21,27 @@ _DEFAULT_RULES = [
         "action": {"type": "notify", "message": "检测到人员进入画面"},
     },
     {
+        "name": "挥手打招呼提醒",
+        "enabled": False,
+        "tier_min": "lite",
+        "trigger": {"type": "gesture", "event": "wave", "confidence_min": 0.55},
+        "action": {"type": "notify", "message": "检测到挥手，用户可能在打招呼"},
+    },
+    {
+        "name": "点头确认待确认任务",
+        "enabled": False,
+        "tier_min": "pro",
+        "trigger": {"type": "gesture", "event": "nod", "confidence_min": 0.55},
+        "action": {"type": "confirm_pending", "message": "检测到点头，已代为确认待确认任务"},
+    },
+    {
+        "name": "摇头取消待确认任务",
+        "enabled": False,
+        "tier_min": "pro",
+        "trigger": {"type": "gesture", "event": "shake", "confidence_min": 0.55},
+        "action": {"type": "cancel_pending", "message": "检测到摇头，已取消待确认任务"},
+    },
+    {
         "name": "语音打开记事本",
         "enabled": True,
         "tier_min": "lite",
@@ -46,6 +67,23 @@ _DEFAULT_RULES = [
         "action": {"type": "notify", "message": "检测到举手手势"},
     },
 ]
+
+
+def ensure_perception_seed_rules() -> None:
+    """补充手势/视觉默认规则（不覆盖用户已有规则）."""
+    existing = {r.name for r in list_rules()}
+    for item in _DEFAULT_RULES:
+        if item["name"] in existing:
+            continue
+        create_rule(
+            RuleCreate(
+                name=item["name"],
+                enabled=bool(item.get("enabled", False)),
+                tier_min=item.get("tier_min", "lite"),
+                trigger=RuleTrigger(**item["trigger"]),
+                action=RuleAction(**item["action"]),
+            )
+        )
 
 
 def seed_defaults() -> None:

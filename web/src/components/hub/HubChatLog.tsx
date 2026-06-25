@@ -95,7 +95,9 @@ export function HubChatLog({ log, stopping, labels, onPatch, onApplyTask, onPoll
   }
 
   const isError = log.status === "error";
-  const isThinking = (log.status === "thinking" && !log.text) || Boolean(stopping);
+  const hasProgress = Boolean(log.thinking && log.thinking.length > 0);
+  const isThinking = (log.status === "thinking" && !log.text && !hasProgress) || Boolean(stopping);
+  const showBusyBubble = isThinking;
 
   return (
     <article className={`hub-chat-row ${isError ? "hub-chat-row-error" : ""}`}>
@@ -104,12 +106,12 @@ export function HubChatLog({ log, stopping, labels, onPatch, onApplyTask, onPoll
       </div>
       <div className="hub-chat-main">
         <span className="hub-chat-name">{labels.agent}</span>
-        {isThinking ? (
+        {showBusyBubble ? (
           <div className={`hub-chat-bubble hub-chat-bubble-agent hub-chat-bubble-busy ${stopping ? "hub-chat-bubble-stopping" : ""}`}>
             <Loader2 size={14} className="animate-spin text-primary" aria-hidden />
             <span>{stopping ? labels.stopping : labels.thinking}</span>
           </div>
-        ) : (
+        ) : log.text || log.status !== "thinking" ? (
           <div
             className={`hub-chat-bubble hub-chat-bubble-agent ${
               isError ? "hub-chat-bubble-error" : ""
@@ -117,7 +119,7 @@ export function HubChatLog({ log, stopping, labels, onPatch, onApplyTask, onPoll
           >
             <ChatMessageContent text={log.text} variant="studio" />
           </div>
-        )}
+        ) : null}
         {log.confirmTask && (
           <ConfirmPanel
             compact

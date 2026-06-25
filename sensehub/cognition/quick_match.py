@@ -81,7 +81,7 @@ def _notepad_type_save_plan(content: str, save_hint: str = "") -> ExecutionPlan:
             PlanStep(
                 step_id=1,
                 tool="notepad_type_save",
-                params={"text": text, "filename": filename, "open": True},
+                params={"text": text, "filename": filename, "open": True, "close": True},
                 risk_level="L1",
                 description=f"记事本粘贴「{text}」并保存为 {filename}",
             ),

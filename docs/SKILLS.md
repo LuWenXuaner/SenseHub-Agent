@@ -1,10 +1,10 @@
-# 灵枢 Agent Cursor Skill 规划（SKILLS）
+# 灵枢 SenseHub Cursor Skill 说明（SKILLS）
 
-开发过程中 Cursor Agent 应遵循项目 Skill，避免 UI 与架构风格漂移。
+> **文档版本**：v1.0（商业化交付版）
 
-**Phase 1 起**在 [`.cursor/skills/`](../.cursor/skills/) 创建实际 `SKILL.md` 文件。UI 总纲见 **[UI_DESIGN.md](UI_DESIGN.md)**；`sensehub-ui` Skill 已创建。
+开发过程中 Cursor Agent 应遵循项目 Skill，保持 UI 与架构风格一致。UI 总纲见 **[UI_DESIGN.md](UI_DESIGN.md)**。
 
-**UI 偏好（已确认）**：双主题；界面须预留多模态与 Lite/Pro/Max 档位差异；[`skills-example/`](../skills-example/) 作参考且 **保留在仓库中**（不入 `.gitignore`）。
+**UI 规范**：双主题；界面须支持 Lite / Standard / Pro / Max 四档订阅展示与 TierGate 门控。
 
 ---
 
@@ -29,7 +29,7 @@
 **要点摘要**：
 - **双主题**：浅色/深色/跟随系统，CSS 变量 + Tailwind `darkMode: 'class'`
 - **顾全大局**：Phase 1 即搭好全量路由与布局槽位；摄像头/语音/虚拟屏用占位，Phase 2–4 填入
-- **档位 UI**：Lite/Pro/Max 同一应用；`TierGate` 锁定不可用功能（可见 + 升级引导），非隐藏
+- **档位 UI**：Lite / Standard / Pro / Max 同一应用；`TierGate` 锁定不可用能力（可见 + 升级引导）
 - **布局**：Sidebar + TopBar + CommandDock；Dashboard 预留 16:9 摄像头 + 语音区
 - **参考**：`skills-example/ui-ux-pro-max`、`ui-styling`、`design-system`
 - **主色** `#6366F1`；shadcn/ui + Lucide 图标

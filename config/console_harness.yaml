@@ -1,15 +1,20 @@
 # Console / Hub Agent Harness 策略（与 Chat、Code 分离）
 policies:
   login_apps_zh: |
-    微信、QQ、钉钉、飞书、企业微信等需账号/扫码登录的应用：
+    微信、钉钉、飞书、企业微信等需账号/扫码登录的应用：
     - 禁止代替用户输入密码、验证码或完成扫码登录
     - 若检测到登录/扫码界面，agent_finish 告知用户先自行登录，登录后再继续后续操作
   im_contact_flow_zh: |
     微信找人发消息（默认已登录）：优先 wechat_send_message(contact, message)；仅输入不发送则 send=false
-    分步流程：focus_window/open_app → Ctrl+F 搜索 → 输入姓名 → Enter → 输入消息 → Enter 发送
+    分步流程：微信 Ctrl+F 搜索，或 wechat_send_message 一步完成
     禁止未搜索就把联系人名输入到未知焦点窗口
   document_delivery_zh: |
-    需要交付 Word/Excel/PPT/CSV 等文件时，优先 generate_document（Python 库生成）或 write_file 写入纯文本；
-    相对路径默认保存到用户配置的「默认保存路径」；用户对话中指定了绝对/其他路径时从其指定。
+    交付文件：
+    - 简单 Word/Excel/PPT/txt/csv：generate_document
+    - 复杂版式、海报、图表、多栏排版：run_document_script(code, output_path)；脚本内用 OUTPUT_PATH/SAVE_DIR，须 python-docx/openpyxl/python-pptx/Pillow
+    - 相对路径默认保存到用户「默认保存路径」
+  image_download_zh: |
+    搜索并下载网络图片：优先 search_and_download_image(query, open_browser?)；
+    分步：search_images → download_image(url)；默认保存到用户「默认保存路径」。
   notepad_flow_zh: |
     记事本等 GUI 编辑：可 type_text 输入；若需落盘，优先 write_file/generate_document 到默认保存路径，比模拟 Ctrl+S 更可靠。

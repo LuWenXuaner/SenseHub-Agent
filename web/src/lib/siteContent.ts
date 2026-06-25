@@ -91,17 +91,17 @@ export const PRODUCT_MATRIX: ProductMatrixItem[] = [
     id: "code",
     title: "灵枢 Code",
     summary:
-      "智能编程助手，帮助您更高效地阅读代码、生成方案与完成协作，让开发工作事半功倍。",
+      "企业级本地编程助手。支持项目目录绑定、Agent / Plan 双工作流与自然语言改码，适用于日常研发协作。",
     landingPath: "/product/code",
     appPath: "/code",
-    cta: "查看详情",
+    cta: "了解详情",
     ctaStyle: "outline",
   },
   {
     id: "console",
     title: "灵枢 Console",
     summary:
-      "一站式智能体工作台。可帮您完成日程安排、文件整理、网页操作等复杂任务，真正替你执行。",
+      "智能体工作台。以自然语言驱动桌面与浏览器自动化，覆盖日程、文件、网页等复杂任务的安全执行与全程审计。",
     landingPath: "/product/console",
     appPath: "/claw",
     cta: "立即体验",
@@ -111,7 +111,7 @@ export const PRODUCT_MATRIX: ProductMatrixItem[] = [
     id: "studio",
     title: "灵枢 Studio",
     summary:
-      "零门槛对话体验。支持文字、语音与视觉多模态交互，随时感受灵枢的智能回复与理解能力。",
+      "多模态对话产品。支持文字、语音与视觉上下文，对接代采旗舰模型，满足创作、问答与业务沟通场景。",
     landingPath: "/product/studio",
     appPath: "/studio",
     cta: "立即体验",
@@ -121,7 +121,7 @@ export const PRODUCT_MATRIX: ProductMatrixItem[] = [
     id: "api",
     title: "灵枢 API",
     summary:
-      "面向企业与开发者的模型接入服务。标准接口、稳定推理、完整文档，快速集成至您的业务系统。",
+      "面向企业与开发者的模型接入服务。兼容 OpenAI / Anthropic 协议，稳定推理、透明计费、文档完备。",
     landingPath: "/product/api",
     appPath: "/console/api-keys",
     cta: "查看文档",

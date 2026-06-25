@@ -41,6 +41,21 @@ def _hotkey_vks(*vk_codes: int) -> None:
     time.sleep(0.04)
 
 
+def _hotkey_chord(*vk_codes: int) -> None:
+    """按住修饰键再按主键，间隔更接近真人操作."""
+    import win32api
+    import win32con
+
+    for vk in vk_codes:
+        win32api.keybd_event(vk, 0, 0, 0)
+        time.sleep(0.02)
+    time.sleep(0.03)
+    for vk in reversed(vk_codes):
+        win32api.keybd_event(vk, 0, win32con.KEYEVENTF_KEYUP, 0)
+        time.sleep(0.02)
+    time.sleep(0.05)
+
+
 def _hotkey_names(*names: str) -> None:
     vks: list[int] = []
     for name in names:
@@ -109,7 +124,6 @@ APP_PROCESS_IMAGES: dict[str, tuple[str, ...]] = {
     "文件管理器": ("explorer.exe",),
     "wechat": ("weixin.exe", "wechat.exe"),
     "微信": ("weixin.exe", "wechat.exe"),
-    "qq": ("qq.exe",),
     "钉钉": ("dingtalk.exe",),
     "dingtalk": ("dingtalk.exe",),
     "飞书": ("feishu.exe",),
@@ -318,6 +332,17 @@ def _find_windows_by_processes(image_names: tuple[str, ...]) -> list[tuple[int, 
     return matches
 
 
+def _process_images_for_known_app(raw_name: str) -> tuple[str, ...]:
+    """已知应用直接返回进程名，避免全盘搜索 exe."""
+    key = raw_name.strip().lower()
+    if key in APP_PROCESS_IMAGES:
+        return APP_PROCESS_IMAGES[key]
+    raw = raw_name.strip()
+    if raw in APP_PROCESS_IMAGES:
+        return APP_PROCESS_IMAGES[raw]
+    return ()
+
+
 def _launch_target(raw_name: str) -> tuple[list[str], tuple[str, ...], tuple[str, ...]]:
     """解析启动目标：内置命令 → 开始菜单快捷方式 → 已安装 exe."""
     name_key = raw_name.strip().lower()
@@ -329,6 +354,14 @@ def _launch_target(raw_name: str) -> tuple[list[str], tuple[str, ...], tuple[str
         exe = APP_MAP[raw_name.strip()]
         proc = _process_images_for(name_key, raw_name, exe)
         return ["cmd", "/c", "start", "", exe], _title_keywords(raw_name.strip()), proc
+
+    keywords = _title_keywords(raw_name)
+    known_proc = _process_images_for_known_app(raw_name)
+    if known_proc:
+        shortcut = _find_start_menu_shortcut(raw_name)
+        if shortcut:
+            return ["cmd", "/c", "start", "", str(shortcut)], keywords, known_proc
+        return ["cmd", "/c", "start", "", raw_name.strip()], keywords, known_proc
 
     process_images: tuple[str, ...] = ()
     shortcut = _find_start_menu_shortcut(raw_name)
@@ -344,9 +377,10 @@ def _launch_target(raw_name: str) -> tuple[list[str], tuple[str, ...], tuple[str
             for img in APP_PROCESS_IMAGES.get(str(candidate).strip().lower(), ()):
                 if img not in alias_images:
                     alias_images.append(img)
-            exe_path = _find_installed_exe(str(candidate))
-            if exe_path and exe_path.name not in alias_images:
-                alias_images.append(exe_path.name)
+            if not alias_images:
+                exe_path = _find_installed_exe(str(candidate))
+                if exe_path and exe_path.name not in alias_images:
+                    alias_images.append(exe_path.name)
         process_images = tuple(alias_images) if alias_images else process_images
         if not process_images:
             exe_path = _find_installed_exe(raw_name)
@@ -394,7 +428,7 @@ def _find_matching_windows(title_keywords: tuple[str, ...]) -> list[tuple[int, s
     return matches
 
 
-def _pick_best_window(matches: list[tuple[int, str, int]]) -> tuple[int, str] | None:
+def _pick_best_window(matches: list[tuple[int, str, int]], *, app: str | None = None) -> tuple[int, str] | None:
     if not matches:
         return None
     non_login = [m for m in matches if not _is_loginish_title(m[1])]
@@ -513,7 +547,16 @@ def _is_notepad_app(app: str) -> bool:
 
 def _is_im_app(app: str) -> bool:
     k = app.strip().lower()
-    return k in ("wechat", "微信", "qq", "钉钉", "dingtalk", "飞书", "feishu")
+    return k in ("wechat", "微信", "钉钉", "dingtalk", "飞书", "feishu")
+
+
+def _allow_set_foreground() -> None:
+    try:
+        import ctypes
+
+        ctypes.windll.user32.AllowSetForegroundWindow(ctypes.c_uint32(0xFFFFFFFF))
+    except Exception:
+        pass
 
 
 def _focus_hwnd(
@@ -529,6 +572,7 @@ def _focus_hwnd(
     import win32process
 
     try:
+        _allow_set_foreground()
         attempts = 3 if aggressive else 1
         for _ in range(attempts):
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
@@ -627,10 +671,7 @@ def window_matches_app(foreground_title: str, app_name: str) -> bool:
         return True
     if any(k.lower() in foreground_title.lower() for k in _title_keywords(app_name)):
         return True
-    try:
-        _, _, process_images = _launch_target(app_name)
-    except ValueError:
-        return False
+    _, process_images = _resolve_app_target(app_name)
     if not process_images:
         return False
     fg = foreground_title.strip()
@@ -648,8 +689,11 @@ def window_matches_app(foreground_title: str, app_name: str) -> bool:
 
 
 def _nudge_app_focus(app: str) -> None:
-    """置前目标应用一次，便于紧接着发 Ctrl+V / Ctrl+S；不校验、不点编辑区."""
+    """置前目标应用一次，便于紧接着发 Ctrl+V / Ctrl+S；记事本会点击编辑区."""
     if not app.strip():
+        return
+    if _is_notepad_app(app):
+        ensure_app_focus_for_input(app, click_edit=True, aggressive=True, post_wait=0.18)
         return
     keywords, process_images = _resolve_app_target(app)
     _focus_window(
@@ -663,12 +707,81 @@ def _nudge_app_focus(app: str) -> None:
     )
 
 
+def _resolve_notepad_save_path(params: dict[str, Any]) -> Path:
+    from sensehub.security.sandbox import default_save_dir
+
+    raw_name = str(params.get("filename") or params.get("path") or "note.txt").strip()
+    if not raw_name:
+        raw_name = "note.txt"
+    target = Path(raw_name)
+    if not target.is_absolute():
+        target = (default_save_dir() / target.name).resolve()
+    else:
+        target = target.expanduser().resolve()
+    if target.suffix.lower() != ".txt":
+        target = target.with_suffix(".txt")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _wait_notepad_file_hwnd(path: Path, *, timeout: float = 8.0) -> int | None:
+    """等待记事本打开指定文件后的窗口句柄（不强抢焦点）."""
+    import win32gui
+
+    name = path.name
+    stem = path.stem
+    deadline = time.time() + timeout
+    keywords, process_images = _resolve_app_target("notepad")
+    while time.time() < deadline:
+        for hwnd, title, _pid in _existing_app_windows(keywords, process_images):
+            low = title.lower()
+            if name.lower() in low or stem.lower() in low:
+                if win32gui.IsWindowVisible(hwnd):
+                    return hwnd
+        time.sleep(0.2)
+    return _find_window_hwnd(keywords, process_images, timeout=0.5)
+
+
+def _close_hwnd_quiet(hwnd: int) -> bool:
+    """优先 WM_CLOSE 关窗，避免 Alt+Tab 切屏."""
+    import win32con
+    import win32gui
+
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return True
+    title = win32gui.GetWindowText(hwnd).strip()
+    try:
+        win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+        time.sleep(0.45)
+        if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
+            return True
+    except Exception:
+        pass
+    if _focus_hwnd(hwnd, aggressive=False, post_focus_wait=0.12):
+        _hotkey_names("alt", "f4")
+        time.sleep(0.4)
+    gone = not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd)
+    return gone
+
+
+def _open_notepad_with_file(path: Path) -> dict[str, Any]:
+    """用记事本打开已有文件；内容已在磁盘，不抢焦点、不粘贴."""
+    subprocess.Popen(["notepad.exe", str(path)], shell=False)
+    hwnd = _wait_notepad_file_hwnd(path, timeout=8.0)
+    if not hwnd:
+        raise RuntimeError("记事本已启动但未检测到文件窗口")
+    import win32gui
+
+    title = win32gui.GetWindowText(hwnd).strip()
+    return {"opened": "notepad", "focused_window": title, "file_path": str(path), "hwnd": hwnd}
+
+
 def _paste_text(text: str) -> None:
-    """剪贴板 + Ctrl+V 粘贴到当前前台窗口."""
+    """剪贴板 + Ctrl+V 粘贴到当前焦点."""
     pyperclip.copy(text)
-    time.sleep(0.08)
-    _hotkey_names("ctrl", "v")
     time.sleep(0.12)
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.15)
 
 
 def _process_images_for(name_key: str, raw_name: str, exe: str) -> tuple[str, ...]:
@@ -689,16 +802,25 @@ def _merge_window_matches(*groups: list[tuple[int, str, int]]) -> list[tuple[int
     return list(merged.values())
 
 
+_IM_MIN_WINDOW_AREA = 280 * 200  # 过滤 IM 托盘提示等小窗，避免误聚焦
+
+
 def _existing_app_windows(
     keywords: tuple[str, ...],
     process_images: tuple[str, ...],
 ) -> list[tuple[int, str, int]]:
     by_title = _find_matching_windows(keywords)
-    if by_title:
-        return by_title
-    if process_images:
-        return _find_windows_by_processes(process_images)
-    return []
+    by_proc = _find_windows_by_processes(process_images) if process_images else []
+    if by_title and by_proc:
+        merged = _merge_window_matches(by_title, by_proc)
+    elif by_title:
+        merged = by_title
+    elif by_proc:
+        merged = by_proc
+    else:
+        return []
+    sized = [m for m in merged if m[2] >= _IM_MIN_WINDOW_AREA]
+    return sized if sized else merged
 
 
 def _login_screen_detected(
@@ -758,7 +880,14 @@ def _click_client_center(hwnd: int) -> None:
 def _resolve_app_target(app: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if _is_notepad_app(app):
         return _NOTEPAD_TITLES, ("notepad.exe",)
+    name_key = app.strip().lower()
     keywords = _title_keywords(app)
+    # 已知 IM/桌面应用：直接用进程名，避免 _launch_target 全盘 rglob *.exe（可达数十秒）
+    if name_key in APP_PROCESS_IMAGES:
+        return keywords, APP_PROCESS_IMAGES[name_key]
+    raw = app.strip()
+    if raw in APP_PROCESS_IMAGES:
+        return keywords, APP_PROCESS_IMAGES[raw]
     try:
         _, _, process_images = _launch_target(app)
     except ValueError:
@@ -838,7 +967,7 @@ def open_app(params: dict[str, Any]) -> dict[str, Any]:
     if not raw_name:
         raise ValueError("未指定应用名称")
 
-    argv, keywords, process_images = _launch_target(raw_name)
+    keywords, process_images = _resolve_app_target(raw_name)
     reuse_if_open = bool(params.get("reuse_if_open", True))
     want_focus = bool(params.get("focus", True))
     startup_wait = _clamp_wait(params.get("startup_wait"), default=1.1, min_v=0.0, max_v=12.0)
@@ -848,12 +977,13 @@ def open_app(params: dict[str, Any]) -> dict[str, Any]:
 
     if existing and reuse_if_open:
         focus_api_ok = False
+        click_edit = _is_notepad_app(raw_name)
         if want_focus:
             focus_api_ok = _focus_window(
                 keywords,
                 process_images,
                 timeout=focus_timeout,
-                click_center=False,
+                click_center=click_edit,
                 app_for_click=raw_name,
                 post_focus_wait=settle_wait,
                 aggressive=True,
@@ -881,16 +1011,23 @@ def open_app(params: dict[str, Any]) -> dict[str, Any]:
             ),
         }
 
+    argv, launch_keywords, launch_proc = _launch_target(raw_name)
+    if launch_proc and not process_images:
+        process_images = launch_proc
+    if launch_keywords and not keywords:
+        keywords = launch_keywords
+
     subprocess.Popen(argv, shell=False)
 
     focus_api_ok = False
+    click_edit = _is_notepad_app(raw_name)
     if want_focus:
         time.sleep(startup_wait)
         focus_api_ok = _focus_window(
             keywords,
             process_images,
             timeout=focus_timeout,
-            click_center=False,
+            click_center=click_edit,
             app_for_click=raw_name,
             post_focus_wait=settle_wait,
             aggressive=True,
@@ -902,7 +1039,7 @@ def open_app(params: dict[str, Any]) -> dict[str, Any]:
                 keywords,
                 process_images,
                 timeout=max(2.0, focus_timeout * 0.6),
-                click_center=False,
+                click_center=click_edit,
                 app_for_click=raw_name,
                 post_focus_wait=settle_wait,
                 aggressive=True,
@@ -938,11 +1075,7 @@ def focus_window(params: dict[str, Any]) -> dict[str, Any]:
     title = str(params.get("title") or params.get("name") or "").strip()
     if not title:
         raise ValueError("未指定窗口 title/name")
-    keywords = _title_keywords(title)
-    try:
-        _, _, process_images = _launch_target(title)
-    except ValueError:
-        process_images = ()
+    keywords, process_images = _resolve_app_target(title)
     timeout = _clamp_wait(params.get("timeout"), default=6.0, min_v=1.0, max_v=20.0)
     settle_wait = _clamp_wait(params.get("settle_wait"), default=0.35, min_v=0.05, max_v=3.0)
     click_center = bool(params.get("click_center", False))
@@ -990,14 +1123,14 @@ def _resolve_close_target(params: dict[str, Any]) -> tuple[str, tuple[str, ...],
     if not raw:
         raise ValueError("未指定要关闭的应用 name/title")
     try:
-        _, keywords, process_images = _launch_target(raw)
+        keywords, process_images = _resolve_app_target(raw)
         return raw, keywords, process_images
     except ValueError:
         return raw, _title_keywords(raw), ()
 
 
 def close_app(params: dict[str, Any]) -> dict[str, Any]:
-    """置前目标窗口（失败则 Alt+Tab 切换）后 WM_CLOSE / Alt+F4 关闭."""
+    """关闭目标窗口：优先 WM_CLOSE（免 Alt+Tab），失败再轻量置前后 Alt+F4."""
     import win32con
     import win32gui
 
@@ -1008,13 +1141,23 @@ def close_app(params: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError(f"未找到要关闭的窗口: {raw}")
 
     window_title = win32gui.GetWindowText(hwnd).strip()
+
+    if _close_hwnd_quiet(hwnd):
+        return {
+            "closed": raw,
+            "window_title": window_title,
+            "method": "wm_close",
+            "still_visible": False,
+            "success": True,
+        }
+
     focus_method = "hwnd"
-    if not _focus_hwnd(hwnd, aggressive=True, post_focus_wait=0.2):
+    if not _focus_hwnd(hwnd, aggressive=False, post_focus_wait=0.15):
         focus_method = "alt_tab"
-        if not _focus_via_alt_tab(hwnd):
+        if not _focus_via_alt_tab(hwnd, max_switches=6):
             raise RuntimeError(f"无法切换到目标窗口: {raw}")
 
-    time.sleep(0.12)
+    time.sleep(0.1)
     closed = False
     close_method = f"{focus_method}_wm_close"
     try:
@@ -1071,11 +1214,7 @@ def minimize_window(params: dict[str, Any]) -> dict[str, Any]:
     import win32gui
 
     title = str(params.get("title") or params.get("name") or "").strip()
-    keywords = _title_keywords(title)
-    try:
-        _, _, process_images = _launch_target(title)
-    except ValueError:
-        process_images = ()
+    keywords, process_images = _resolve_app_target(title)
     hwnd = _find_window_hwnd(keywords, process_images)
     if not hwnd:
         raise RuntimeError(f"未找到窗口: {title}")
@@ -1088,11 +1227,7 @@ def maximize_window(params: dict[str, Any]) -> dict[str, Any]:
     import win32gui
 
     title = str(params.get("title") or params.get("name") or "").strip()
-    keywords = _title_keywords(title)
-    try:
-        _, _, process_images = _launch_target(title)
-    except ValueError:
-        process_images = ()
+    keywords, process_images = _resolve_app_target(title)
     hwnd = _find_window_hwnd(keywords, process_images)
     if not hwnd:
         raise RuntimeError(f"未找到窗口: {title}")
@@ -1131,10 +1266,17 @@ def type_text(params: dict[str, Any]) -> dict[str, Any]:
     app = str(params.get("app") or "").strip()
 
     if app:
-        _nudge_app_focus(app)
+        if _is_notepad_app(app):
+            ok, fg_title, _ = ensure_app_focus_for_input(
+                app, click_edit=True, aggressive=False, post_wait=max(pre_wait, 0.15)
+            )
+            if not ok:
+                ensure_app_focus_for_input(app, click_edit=True, aggressive=True, post_wait=0.18)
+        else:
+            _nudge_app_focus(app)
 
     foreground = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
-    time.sleep(pre_wait)
+    time.sleep(pre_wait if not app or not _is_notepad_app(app) else 0.08)
 
     if any(ord(ch) > 127 for ch in text):
         _paste_text(text)
@@ -1175,19 +1317,7 @@ def _commit_save_dialog(target: Path) -> bool:
 
 def save_notepad(params: dict[str, Any]) -> dict[str, Any]:
     """记事本 Ctrl+S → 填路径 → 回车（发快捷键前可 nudge 置前）."""
-    from sensehub.security.sandbox import default_save_dir
-
-    raw_name = str(params.get("filename") or params.get("path") or "note.txt").strip()
-    if not raw_name:
-        raw_name = "note.txt"
-    target = Path(raw_name)
-    if not target.is_absolute():
-        target = (default_save_dir() / target.name).resolve()
-    else:
-        target = target.expanduser().resolve()
-    if target.suffix.lower() != ".txt":
-        target = target.with_suffix(".txt")
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target = _resolve_notepad_save_path(params)
 
     app = str(params.get("app") or "notepad").strip()
     if app:
@@ -1197,49 +1327,120 @@ def save_notepad(params: dict[str, Any]) -> dict[str, Any]:
     _hotkey_names("ctrl", "s")
     time.sleep(1.6)
     saved = _commit_save_dialog(target)
+    size = target.stat().st_size if target.is_file() else 0
     return {
         "saved_path": str(target),
         "filename": target.name,
         "file_exists": saved,
+        "file_size": size,
         "method": "ctrl_s_paste_path",
     }
 
 
 def notepad_type_save(params: dict[str, Any]) -> dict[str, Any]:
-    """记事本一条龙：打开置前 → Ctrl+V 粘贴 → Ctrl+S 保存（同一线程连续发快捷键）."""
+    """记事本：Python 写入磁盘 → 打开文件 → 可选 Ctrl+S → 可选关闭（默认关闭）."""
     text = str(params.get("text", "")).strip()
     if not text:
         raise ValueError("text 不能为空")
     raw_name = str(params.get("filename") or params.get("path") or "note.txt").strip() or "note.txt"
+    target = _resolve_notepad_save_path({"filename": raw_name, "path": raw_name})
     do_open = bool(params.get("open", True))
+    do_save = bool(params.get("save", False))
+    do_close = bool(params.get("close", True))
+
+    target.write_text(text, encoding="utf-8")
+    if not target.is_file() or target.stat().st_size <= 0:
+        raise RuntimeError("正文未能写入目标文件")
 
     open_out: dict[str, Any] | None = None
+    hwnd: int | None = None
     if do_open:
-        open_out = open_app({"name": "notepad", "focus": True, "reuse_if_open": True})
-    else:
-        _nudge_app_focus("notepad")
-    time.sleep(0.3)
+        open_out = _open_notepad_with_file(target)
+        hwnd = int(open_out.get("hwnd") or 0) or None
+        time.sleep(0.25)
 
-    _nudge_app_focus("notepad")
-    type_out = type_text({"text": text})
-    time.sleep(0.2)
-    _nudge_app_focus("notepad")
-    save_out = save_notepad({"filename": raw_name, "app": "notepad"})
+    if do_save and hwnd:
+        if _focus_hwnd(hwnd, aggressive=False, post_focus_wait=0.1):
+            _hotkey_names("ctrl", "s")
+            time.sleep(0.35)
+
+    closed = False
+    close_method = ""
+    if do_close:
+        if hwnd:
+            closed = _close_hwnd_quiet(hwnd)
+            close_method = "wm_close" if closed else "close_failed"
+        else:
+            close_out = close_app({"name": "notepad"})
+            closed = bool(close_out.get("success"))
+            close_method = str(close_out.get("method") or "")
+
     return {
         "text": text,
         "opened": do_open,
         "open": open_out,
-        "typed_length": type_out.get("typed_length"),
-        "method": type_out.get("method"),
-        **save_out,
+        "saved": True,
+        "closed": closed,
+        "close_method": close_method,
+        "typed_length": len(text),
+        "method": "write_open_close",
+        "saved_path": str(target),
+        "filename": target.name,
+        "file_exists": True,
+        "file_size": target.stat().st_size,
     }
 
 
 def wechat_send_message(params: dict[str, Any]) -> dict[str, Any]:
-    """微信：首步置前一次 → Ctrl+F 搜联系人 → Enter 进会话 → 粘贴 → Enter 发送。
+    """微信：置前 → Ctrl+F 搜联系人 → 进会话 → 粘贴 → 回车发送."""
+    return _im_send_message("微信", params)
 
-    置前、Ctrl+F、进会话之后均默认焦点仍在微信，不再重复找窗/点编辑区/校验前台。
-    """
+
+_IM_SEND_TIMING: dict[str, dict[str, float]] = {
+    "微信": {"search_wait": 0.55, "chat_wait": 0.40},
+}
+
+
+def _im_send_timing(app: str) -> dict[str, float]:
+    return _IM_SEND_TIMING.get(app.strip()) or _IM_SEND_TIMING.get(app.strip().lower()) or _IM_SEND_TIMING["微信"]
+
+
+def _im_ctrl_f_search(app: str, hwnd: int) -> None:
+    """微信：置前后 Ctrl+F 打开搜索框."""
+    if not _foreground_matches_hwnd(hwnd):
+        _focus_hwnd(hwnd, aggressive=True, post_focus_wait=0.2)
+    if not foreground_is_app(app):
+        raise RuntimeError(f"无法将{app}置于前台，请缩小 Hub 窗口后重试")
+    _hotkey_chord(_VK["ctrl"], ord("F"))
+
+
+def _im_open_search(app: str, hwnd: int) -> str:
+    """打开 IM 搜索框（微信 Ctrl+F）."""
+    _im_ctrl_f_search(app, hwnd)
+    return "ctrl_f"
+
+
+def _focus_im_hwnd(app: str) -> tuple[int, str]:
+    """置前 IM 主窗口并返回 hwnd."""
+    keywords, process_images = _resolve_app_target(app)
+    best = _pick_best_window(_existing_app_windows(keywords, process_images), app=app)
+    if not best:
+        raise RuntimeError(f"未检测到{app}窗口，请先在桌面打开并登录{app}后再试")
+    hwnd, title = best
+    if not _focus_hwnd(
+        hwnd,
+        aggressive=True,
+        click_center=False,
+        app_for_click=app,
+        post_focus_wait=0.25,
+    ):
+        raise RuntimeError(f"无法将{app}置于前台，请确认已打开并登录")
+    if not foreground_is_app(app):
+        raise RuntimeError(f"无法将{app}置于前台，请缩小 Hub 窗口后重试")
+    return hwnd, title or ""
+
+
+def _im_send_message(app: str, params: dict[str, Any]) -> dict[str, Any]:
     contact = str(params.get("contact") or params.get("name") or "").strip()
     message = str(params.get("message") or params.get("text") or "").strip()
     if not contact:
@@ -1247,57 +1448,60 @@ def wechat_send_message(params: dict[str, Any]) -> dict[str, Any]:
     if not message:
         raise ValueError("message 不能为空")
 
-    app = "微信"
+    try:
+        from sensehub.perception.virtual_session import VirtualScreenSession
+
+        if VirtualScreenSession.is_active():
+            VirtualScreenSession.suspend_automation(12.0)
+    except Exception:
+        pass
+
     do_send = bool(params.get("send", True))
     do_open = bool(params.get("open", False))
-    search_wait = _clamp_wait(params.get("search_wait"), default=0.9, min_v=0.35, max_v=3.0)
-    chat_wait = _clamp_wait(params.get("chat_wait"), default=0.55, min_v=0.2, max_v=3.0)
+    timing = _im_send_timing(app)
+    search_wait = _clamp_wait(params.get("search_wait"), default=timing["search_wait"], min_v=0.2, max_v=3.0)
+    chat_wait = _clamp_wait(params.get("chat_wait"), default=timing["chat_wait"], min_v=0.15, max_v=3.0)
 
     keywords, process_images = _resolve_app_target(app)
     existing = _existing_app_windows(keywords, process_images)
     if not existing:
-        raise RuntimeError("未检测到微信在运行，请先启动微信")
+        raise RuntimeError(f"未检测到{app}窗口，请先在桌面打开并登录{app}后再试")
 
-    focused_title = ""
     open_out: dict[str, Any] | None = None
+
     if do_open:
         open_out = open_app({"name": app, "focus": True, "reuse_if_open": True})
-        focused_title = str((open_out or {}).get("focused_window") or (open_out or {}).get("foreground_window") or "")
-        time.sleep(0.12)
-    else:
-        best = _pick_best_window(existing)
-        if best:
-            hwnd, focused_title = best
-            _focus_hwnd(
-                hwnd,
-                click_center=False,
-                app_for_click=app,
-                post_focus_wait=0.12,
-                aggressive=True,
-            )
-        time.sleep(0.1)
+        time.sleep(0.25)
 
-    _hotkey_names("ctrl", "f")
-    time.sleep(0.28)
-    _hotkey_names("ctrl", "a")
-    time.sleep(0.05)
+    hwnd, focused_title = _focus_im_hwnd(app)
+    search_step = _im_open_search(app, hwnd)
+    time.sleep(0.2)
     _paste_text(contact)
     time.sleep(search_wait)
     _press_vk(_VK["enter"])
     time.sleep(chat_wait)
     _paste_text(message)
-    time.sleep(0.08)
+    time.sleep(0.04)
 
     sent = False
     if do_send:
         _press_vk(_VK["enter"])
         sent = True
-        time.sleep(0.08)
+        time.sleep(0.04)
 
     if not focused_title:
         import win32gui
 
         focused_title = win32gui.GetWindowText(win32gui.GetForegroundWindow()).strip()
+
+    flow = [
+        "focus",
+        search_step,
+        "paste_contact",
+        "enter_chat",
+        "paste_message",
+        "enter_send" if sent else "skip_send",
+    ]
 
     return {
         "app": app,
@@ -1305,6 +1509,8 @@ def wechat_send_message(params: dict[str, Any]) -> dict[str, Any]:
         "message": message,
         "sent": sent,
         "method": "ctrl_f_search_paste_send",
+        "flow": flow,
+        "target_window": focused_title,
         "foreground_window": focused_title,
         "open": open_out,
     }
@@ -1331,6 +1537,17 @@ def _primary_app_from_steps(steps: list[Any]) -> str | None:
 
 def schedule_refocus_from_steps(steps: list[Any], *, delay: float = 0.45) -> None:
     """Hub 网页在请求返回后常会抢回焦点；延迟再次把目标应用置前."""
+    for step in reversed(steps):
+        tool = getattr(step, "tool", None) or (step.get("tool") if isinstance(step, dict) else None)
+        if tool == "wechat_send_message":
+            return
+        if tool == "notepad_type_save":
+            params = getattr(step, "params", None) or (step.get("params") if isinstance(step, dict) else {}) or {}
+            if params.get("close", True):
+                return
+            break
+        break
+
     name = _primary_app_from_steps(steps)
     if not name:
         return

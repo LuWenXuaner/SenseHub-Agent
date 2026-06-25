@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { LayoutProvider } from "@/context/LayoutContext";
 import { LocaleProvider } from "@/context/LocaleContext";
@@ -25,7 +25,6 @@ import { ProductApiPage } from "@/pages/ProductApiPage";
 import { TaskDetailPage } from "@/pages/TaskDetailPage";
 import { CameraPage } from "@/pages/perception/CameraPage";
 import { VoicePage } from "@/pages/perception/VoicePage";
-import { VirtualScreenPage } from "@/pages/perception/VirtualScreenPage";
 import { ConsoleAccountPage } from "@/pages/console/ConsoleAccountPage";
 import { ConsoleApiKeysPage } from "@/pages/console/ConsoleApiKeysPage";
 import { ConsoleEngagementPage } from "@/pages/console/ConsoleEngagementPage";
@@ -48,7 +47,11 @@ import {
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
-  if (!token) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!token) {
+    const redirect = `${location.pathname}${location.search}`;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
+  }
   return <>{children}</>;
 }
 
@@ -126,6 +129,14 @@ function AppRoutes() {
         <Route path="studio" element={<StudioPage />} />
       </Route>
       <Route
+        path="perception/virtual-screen"
+        element={
+          <PrivateRoute>
+            <Navigate to="/claw?calibrate=virtual" replace />
+          </PrivateRoute>
+        }
+      />
+      <Route
         element={
           <PrivateRoute>
             <WorkspaceShell />
@@ -139,7 +150,6 @@ function AppRoutes() {
         <Route path="settings" element={<Navigate to="/console/api-keys" replace />} />
         <Route path="perception/camera" element={<CameraPage />} />
         <Route path="perception/voice" element={<VoicePage />} />
-        <Route path="perception/virtual-screen" element={<VirtualScreenPage />} />
         <Route path="perception" element={<Navigate to="/perception/camera" replace />} />
         <Route path="rules" element={<Navigate to="/console/plugins" replace />} />
         <Route path="system/models" element={<Navigate to="/models" replace />} />

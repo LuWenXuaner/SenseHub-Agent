@@ -1,6 +1,9 @@
-# 灵枢 Agent 架构与接口（ARCHITECTURE）
+# 灵枢 SenseHub 系统架构说明（ARCHITECTURE）
 
-模块划分、数据流与核心数据结构。接口变更由组长评审并同步全员。
+> **文档版本**：v1.0（商业化交付版）  
+> **档位门控**：见 [TIERS.md](TIERS.md)；运行时特性由 `sensehub/licensing/tier.py` 统一校验。
+
+模块划分、数据流与核心接口说明。接口变更须经过评审并同步文档。
 
 ---
 
@@ -71,8 +74,9 @@ flowchart TB
 | `sensehub/execution/` | 工具实现；`browser/playwright_browser.py` snapshot-act |
 | `sensehub/db/sessions.py` | 会话 transcript SQLite |
 | `sensehub/perception/` | 摄像头、虚拟屏、ASR |
-| `sensehub/orchestration/` | LangGraph 确认门、任务 runner（有 plan 时） |
-| `web/` | Hub 控制台（布局不变；会话同步服务端） |
+| `sensehub/licensing/` | 订阅档位、用量限额、`feature_enabled` 门控 |
+| `sensehub/orchestration/` | LangGraph 确认门、任务 runner、多 Agent 协调 |
+| `web/` | React 控制台：Console / Studio / Code / Token Plan |
 | `.cursor/skills/` | **开发用** Cursor Skill（不参与运行时） |
 
 ---

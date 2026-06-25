@@ -2,7 +2,7 @@
 
 network:
   bind_host: "127.0.0.1"
-  allow_lan: false
+  allow_lan: true
   ip_whitelist: []
 
 auth:

@@ -122,8 +122,9 @@ def gate_ui_action(step: PlanStep, prior_steps: list[PlanStep], user_text: str, 
         params_text = str(step.params.get("text", ""))
         if params_text and len(params_text) <= 32:
             return (
-                "在 IM/聊天应用内查找联系人须先 hotkey(app=应用名, keys=[ctrl,f]) 打开搜索"
-                "（微信默认 Ctrl+F），再 type_text 输入姓名 → Enter 进入会话。"
+                "在 IM/聊天应用内查找联系人须先打开搜索：微信 hotkey(app=微信, keys=[ctrl,f])；"
+                "或 wechat_send_message 一步完成。"
+                "再 type_text 输入姓名 → Enter 进入会话。"
                 "确认进入正确会话后再输入消息。若应用未登录，请先告知用户自行登录。"
             )
     return None

@@ -22,9 +22,14 @@ export const TOOL_LABEL: Record<string, string> = {
   web_search: "浏览器搜索",
   open_url: "打开网页",
   fetch_url: "抓取网页内容",
+  web_search_results: "全网搜索",
+  search_images: "搜索图片",
+  download_image: "下载图片",
+  search_and_download_image: "搜索并下载图片",
   get_weather: "查询天气",
   screenshot: "截取屏幕",
   generate_document: "生成文档",
+  run_document_script: "运行文档脚本",
   write_file: "写入文件",
   read_file: "读取文件",
   list_dir: "列出目录",
@@ -108,9 +113,14 @@ function formatStepResult(step: PlanStep, result?: StepResult): string {
   if (step.tool === "save_notepad" || step.tool === "notepad_type_save") {
     const path = out.saved_path ? String(out.saved_path) : "";
     const text = out.text ? String(out.text).slice(0, 24) : "";
-    if (path && text) return `已输入「${text}」并保存到 ${path}`;
-    if (path) return `已保存到 ${path}`;
-    return "已完成";
+    const size = out.file_size != null ? Number(out.file_size) : null;
+    const closed = out.closed === true;
+    if (size === 0) return "文件已保存但内容为空";
+    const closeHint = closed ? "，已关闭记事本" : "";
+    if (path && text) return `已写入「${text}…」并保存到 ${path}${closeHint}`;
+    if (path && size != null && size > 0) return `已保存到 ${path}（${size} 字节）${closeHint}`;
+    if (path) return `已保存到 ${path}${closeHint}`;
+    return closed ? "已完成并关闭记事本" : "已完成";
   }
   if (step.tool === "wechat_send_message") {
     const contact = out.contact ? String(out.contact) : step.params?.contact ? String(step.params.contact) : "";
@@ -140,6 +150,21 @@ function formatStepResult(step: PlanStep, result?: StepResult): string {
     return `已从 ${src} 拉取${loc ? `「${loc}」` : ""} ${forecasts.length} 天预报${preview ? `（${preview}）` : ""}`;
   }
   if (step.tool === "fetch_url" && out.url) return `已抓取 ${out.url}`;
+  if (step.tool === "search_images" && out.count != null) {
+    const q = out.query ? String(out.query) : "";
+    return q ? `已找到 ${out.count} 张与「${q}」相关的图片` : `已找到 ${out.count} 张图片`;
+  }
+  if (step.tool === "download_image" && out.path) return `图片已保存到 ${out.path}`;
+  if (step.tool === "search_and_download_image" && out.saved_path) {
+    const q = out.query ? String(out.query) : "";
+    return q ? `已搜索「${q}」并下载到 ${out.saved_path}` : `图片已下载到 ${out.saved_path}`;
+  }
+  if (step.tool === "generate_document" && out.path) {
+    return `已生成 ${out.format || "文档"}：${out.path}`;
+  }
+  if (step.tool === "run_document_script" && out.path) {
+    return `已通过脚本生成文件：${out.path}`;
+  }
   if (step.tool === "screenshot" && out.screenshot_path) return "截图已保存";
   if (step.tool === "browser_snapshot" && out.ref_count != null) return `页面元素 ${out.ref_count} 个`;
   if (step.tool === "browser_navigate" && out.url) return `已打开 ${out.url}`;
@@ -254,6 +279,8 @@ export function buildThinkingSteps(
       push("安全审查", passed ? "操作风险可接受，允许执行" : String(agent.reason || "已拦截"), passed ? "done" : "error");
     } else if (role === "skill") {
       push("加载规程", String(agent.name || agent.id || "Skill"));
+    } else if (role === "atomic_plan") {
+      push("快捷执行", String(agent.summary || "原子桌面操作"));
     } else if (role === "synthesizer") {
       const target = String(agent.target_tool || "");
       const preview = String(agent.preview || "").trim();
@@ -449,6 +476,199 @@ export function resolveDisplayText(
   return res.reply || res.message || "已处理";
 }
 
+export type AgentStreamEvent = Record<string, unknown>;
+
+function streamToolDetail(tool: string, params?: Record<string, unknown>): string {
+  const p = params || {};
+  if (tool === "wechat_send_message") {
+    const c = p.contact ? String(p.contact) : "";
+    const m = p.message ? String(p.message).slice(0, 24) : "";
+    if (c && m) return `向「${c}」发送「${m}」`;
+    if (c) return `联系人 ${c}`;
+  }
+  if (tool === "open_app" && p.name) return `应用 ${p.name}`;
+  return "";
+}
+
+/** 统一重排步骤序号，避免 WS 与提交占位导致两个「2.」. */
+export function renumberThinkingSteps(steps: ThinkingStep[]): ThinkingStep[] {
+  return steps.map((s, i) => {
+    const bare = s.label.replace(/^\d+\.\s*/, "");
+    return { ...s, label: `${i + 1}. ${bare}` };
+  });
+}
+
+function collapseStreamPlaceholders(steps: ThinkingStep[]): ThinkingStep[] {
+  let out = steps.filter((s) => s.id !== "submit-start");
+  const hasIntent = out.some((s) => s.id === "stream-phase-intent");
+  const hasTool = out.some((s) => s.id.startsWith("stream-tool-"));
+  if (hasIntent || hasTool) {
+    out = out.filter((s) => s.id !== "stream-exec");
+  }
+  return out;
+}
+
+/** 将 /ws/agent 推送合并进当前思考链（请求未返回前展示进度）. */
+export function applyAgentStreamEvent(prev: ThinkingStep[], event: AgentStreamEvent): ThinkingStep[] {
+  const type = String(event.type || "");
+  let steps = collapseStreamPlaceholders([...prev]);
+
+  const pushStep = (id: string, title: string, detail: string, status: StepStatus = "running") => {
+    if (steps.some((s) => s.id === id)) return;
+    steps.push({ id, label: title, detail, status });
+    steps = renumberThinkingSteps(steps);
+  };
+
+  if (type === "agent_start") {
+    if (!steps.some((s) => s.id === "stream-phase-intent")) {
+      pushStep("stream-exec", "执行中", "正在调用桌面工具…", "running");
+    }
+    return steps;
+  }
+
+  if (type === "phase") {
+    const phase = String(event.phase || "");
+    const status = String(event.status || "");
+    const id = `stream-phase-${phase}`;
+    if (status === "running") {
+      const label = phase === "intent" ? "意图分析" : phase;
+      pushStep(id, label, "", "running");
+    } else if (status === "done") {
+      const goal = String(event.goal || "").trim();
+      steps = collapseStreamPlaceholders(steps);
+      steps = steps.map((s) =>
+        s.id === id
+          ? { ...s, status: "done" as StepStatus, detail: goal || s.detail || "完成" }
+          : s
+      );
+      steps = renumberThinkingSteps(steps);
+    }
+    return steps;
+  }
+
+  if (type === "tool_start") {
+    const tool = String(event.tool || "");
+    const stepId = event.step_id != null ? String(event.step_id) : String(steps.length);
+    const id = `stream-tool-${tool}-${stepId}`;
+    const title = TOOL_LABEL[tool] || tool;
+    pushStep(
+      id,
+      title,
+      streamToolDetail(tool, event.params as Record<string, unknown>) || "",
+      "running"
+    );
+    return steps;
+  }
+
+  if (type === "tool_end") {
+    const tool = String(event.tool || "");
+    const stepId = event.step_id != null ? String(event.step_id) : "";
+    const id = stepId ? `stream-tool-${tool}-${stepId}` : "";
+    const fakeStep = {
+      step_id: 0,
+      tool,
+      params: {},
+      risk_level: "L1",
+      description: "",
+    } as PlanStep;
+    const result = {
+      step_id: 0,
+      success: Boolean(event.success),
+      output: (event.output || {}) as Record<string, unknown>,
+      error: event.error ? String(event.error) : undefined,
+    } as StepResult;
+    const detail = formatStepResult(fakeStep, result);
+    const status: StepStatus = result.success ? "done" : "error";
+    if (id && steps.some((s) => s.id === id)) {
+      steps = steps.map((s) => (s.id === id ? { ...s, detail, status } : s));
+    } else {
+      for (let i = steps.length - 1; i >= 0; i -= 1) {
+        const label = TOOL_LABEL[tool] || tool;
+        if (steps[i].status === "running" && steps[i].label.includes(label)) {
+          steps[i] = { ...steps[i], detail, status };
+          break;
+        }
+      }
+    }
+    if (result.success) {
+      steps = steps.map((s) =>
+        s.id === "stream-exec" || (s.status === "running" && s.id.startsWith("stream-phase-"))
+          ? { ...s, status: "done" as StepStatus }
+          : s
+      );
+    }
+    return renumberThinkingSteps(steps);
+  }
+
+  if (type === "agent_done") {
+    steps = steps.map((s) =>
+      s.status === "running" || s.status === "pending" ? { ...s, status: "done" as StepStatus } : s
+    );
+    return renumberThinkingSteps(steps);
+  }
+
+  return steps;
+}
+
+/** WS 事件驱动的主气泡更新（桌面工具完成后不必等 HTTP 返回）. */
+export function streamLogPatchFromAgentEvent(
+  event: AgentStreamEvent,
+  prev: { thinking?: ThinkingStep[]; text?: string; status?: string }
+): {
+  thinking: ThinkingStep[];
+  text?: string;
+  status?: "thinking" | "done" | "error";
+  thinkingOpen?: boolean;
+} {
+  const thinking = applyAgentStreamEvent(prev.thinking || [], event);
+  const patch: {
+    thinking: ThinkingStep[];
+    text?: string;
+    status?: "thinking" | "done" | "error";
+    thinkingOpen?: boolean;
+  } = { thinking };
+
+  const type = String(event.type || "");
+
+  if (type === "tool_end" && event.success) {
+    const tool = String(event.tool || "");
+    const out = (event.output || {}) as Record<string, unknown>;
+    if (tool === "wechat_send_message") {
+      const contact = String(out.contact || "");
+      const message = String(out.message || "");
+      const sent = out.sent === true;
+      if (contact && message) {
+        patch.text = sent
+          ? `已向「${contact}」发送「${message}」`
+          : `已在与「${contact}」的会话中输入「${message}」`;
+        patch.status = "done";
+        patch.thinkingOpen = false;
+      }
+    } else if (tool === "notepad_type_save" && out.saved_path) {
+      const name = String(out.filename || "");
+      patch.text = name
+        ? `已将内容写入记事本并保存为「${name}」${out.closed ? "，并已关闭记事本" : ""}`
+        : `已保存到 ${out.saved_path}`;
+      patch.status = "done";
+      patch.thinkingOpen = false;
+    }
+  }
+
+  if (type === "agent_done") {
+    const answer = String(event.answer || "").trim();
+    if (answer) {
+      patch.text = answer;
+      patch.status = "done";
+      patch.thinkingOpen = false;
+    }
+    patch.thinking = thinking.map((s) =>
+      s.status === "running" || s.status === "pending" ? { ...s, status: "done" as StepStatus } : s
+    );
+  }
+
+  return patch;
+}
+
 export function logPatchFromTask(task: Task, prev: { thinking?: ThinkingStep[]; text?: string }): {
   thinking: ThinkingStep[];
   thinkingOpen: boolean;
@@ -464,7 +684,7 @@ export function logPatchFromTask(task: Task, prev: { thinking?: ThinkingStep[]; 
     task.status === "failed" || task.status === "cancelled" ? "error" : done ? "done" : "thinking";
   return {
     thinking,
-    thinkingOpen: !done,
+    thinkingOpen: false,
     status,
     text:
       task.status === "wait_confirm"

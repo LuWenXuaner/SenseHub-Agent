@@ -245,14 +245,20 @@ def path_needs_confirm(path_str: str, operation: Operation = "write") -> bool:
 def grant_paths_on_confirm(steps: list[Any]) -> list[str]:
     """用户点确认后，为计划中的工作区外写入路径追加运行时授权."""
     granted: list[str] = []
-    write_tools = {"write_file", "copy_file"}
+    write_tools = {"write_file", "copy_file", "generate_document", "run_document_script"}
+    path_keys = {
+        "write_file": "path",
+        "copy_file": "dst",
+        "generate_document": "path",
+        "run_document_script": "output_path",
+    }
     for step in steps:
         tool = getattr(step, "tool", None) or (step.get("tool") if isinstance(step, dict) else "")
         params = getattr(step, "params", None) or (step.get("params") if isinstance(step, dict) else {}) or {}
         if tool not in write_tools:
             continue
-        path_key = "path" if tool == "write_file" else "dst"
-        target = str(params.get(path_key, ""))
+        path_key = path_keys.get(tool, "path")
+        target = str(params.get(path_key) or params.get("path") or params.get("filename") or "")
         if not target or not path_needs_confirm(target, "write"):
             continue
         try:
@@ -280,7 +286,8 @@ def describe_for_planner() -> str:
     lines += [
         "- 用户在对话中指定了绝对路径或其他目录时，从其指定路径保存",
         "- 工作区外写入：步骤须标记 risk_level=L2 且 requires_confirm=true，等用户点「确认」",
-        "- Word/Excel/PPT 等结构化文档：优先 generate_document；纯文本用 write_file",
+        "- 简单 Word/Excel/PPT/txt：generate_document；复杂版式/海报/图表：run_document_script(code, output_path)",
+        "- 纯文本用 write_file",
         "- 无专用工具时：可组合 open_app / web_search / open_url / gui_agent / fetch_url 等迂回完成目标",
         "- 需要文件结果：优先 write_file / generate_document，再把路径告诉用户",
         "已授权可写目录：",

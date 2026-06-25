@@ -14,7 +14,7 @@ from sensehub.execution.browser.playwright_browser import (
     browser_status,
     browser_tabs,
 )
-from sensehub.execution.tools import agent_ops, browser, clipboard, desktop, document_gen, file_ops, gui, research, screenshot, system, virtual
+from sensehub.execution.tools import agent_ops, browser, clipboard, desktop, document_gen, document_script, file_ops, gui, images, perception, research, screenshot, system, virtual
 from sensehub.models.schemas import PlanStep, StepResult
 
 ToolFn = Callable[[dict[str, Any]], dict[str, Any]]
@@ -58,12 +58,16 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     # 信息检索（returns_data，供应答脑引用）
     "fetch_url": (research.fetch_url, "L0"),
     "web_search_results": (research.web_search_results, "L0"),
+    "search_images": (images.search_images, "L0"),
+    "download_image": (images.download_image, "L1"),
+    "search_and_download_image": (images.search_and_download_image, "L1"),
     "get_weather": (research.get_weather, "L0"),
     # 文件
     "list_dir": (file_ops.list_dir, "L0"),
     "read_file": (file_ops.read_file, "L0"),
     "write_file": (file_ops.write_file, "L2"),
     "generate_document": (document_gen.generate_document, "L2"),
+    "run_document_script": (document_script.run_document_script, "L2"),
     "copy_file": (file_ops.copy_file, "L2"),
     "file_exists": (file_ops.file_exists, "L0"),
     "open_folder": (file_ops.open_folder, "L1"),
@@ -83,6 +87,7 @@ REGISTRY: dict[str, tuple[ToolFn, str]] = {
     "virtual_keyboard_toggle": (virtual.virtual_keyboard_toggle, "L1"),
     # 感知
     "screenshot": (screenshot.run, "L1"),
+    "get_perception_state": (perception.get_perception_state, "L0"),
     # VLM 兜底
     "gui_agent": (_gui_agent_tool, "L1"),
 }

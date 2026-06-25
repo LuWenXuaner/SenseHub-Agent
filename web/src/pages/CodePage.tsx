@@ -1,76 +1,63 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronRight,
+  Code2,
+  FilePlus,
   FolderOpen,
   Loader2,
   PanelRightClose,
   PanelRightOpen,
+  RefreshCw,
   Save,
   SendHorizonal,
   Sparkles,
   X,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useCode } from "@/context/CodeContext";
 import { ChatMessageContent } from "@/components/chat/ChatMessageContent";
+import {
+  AgentStudioAvatar,
+  StudioAvatarPlaceholder,
+  UserStudioAvatar,
+} from "@/components/chat/StudioChatAvatar";
+import { CodeAgentToolbar } from "@/components/code/CodeAgentToolbar";
+import { CodeFileTree } from "@/components/code/CodeFileTree";
+import { CodeMonacoEditor } from "@/components/code/CodeMonacoEditor";
+import { buildFileTree } from "@/lib/codeFileTree";
+import {
+  createProjectFile,
+  deleteProjectPath,
+  listProjectFiles,
+  loadLastActivePath,
+  loadProjectHandle,
+  matchContextFiles,
+  readProjectText,
+  saveLastActivePath,
+  saveProjectHandle,
+  supportsCodeProject,
+  verifyProjectPermission,
+  writeProjectFile,
+  getProjectFileHandle,
+  type CodeFileEntry,
+} from "@/lib/codeProject";
 import { api, type ChatTurn } from "@/lib/api";
 import { formatUserFacingError } from "@/lib/thinkingTrace";
+import { userStorageScope } from "@/lib/userScope";
 
-type FileEntry = { path: string; handle: FileSystemFileHandle };
-type DirHandle = FileSystemDirectoryHandle;
-
-const MAX_CONTEXT_FILE_BYTES = 48_000;
 const AGENT_MIN = 300;
 const AGENT_MAX = 560;
 const AGENT_DEFAULT = 380;
 
-async function listFiles(dir: DirHandle, prefix = ""): Promise<FileEntry[]> {
-  const out: FileEntry[] = [];
-  const iter = (dir as unknown as { entries: () => AsyncIterableIterator<[string, FileSystemHandle]> }).entries();
-  for await (const [name, entry] of iter) {
-    const path = prefix ? `${prefix}/${name}` : name;
-    if (entry.kind === "file") {
-      out.push({ path, handle: entry as FileSystemFileHandle });
-    } else if (entry.kind === "directory" && out.length < 300) {
-      out.push(...(await listFiles(entry as FileSystemDirectoryHandle, path)));
-    }
-    if (out.length >= 300) break;
-  }
-  return out.sort((a, b) => a.path.localeCompare(b.path));
-}
-
-async function writeFile(handle: FileSystemFileHandle, content: string) {
-  const writable = await handle.createWritable();
-  await writable.write(content);
-  await writable.close();
-}
-
-async function readText(handle: FileSystemFileHandle, maxBytes = MAX_CONTEXT_FILE_BYTES) {
-  const file = await handle.getFile();
-  if (file.size > maxBytes) {
-    const slice = file.slice(0, maxBytes);
-    return (await slice.text()) + "\n\n…(文件过大，已截断)";
-  }
-  return file.text();
-}
-
-function matchContextFiles(text: string, files: FileEntry[], activePath: string) {
-  const lower = text.toLowerCase();
-  return files
-    .filter((f) => {
-      if (f.path === activePath) return false;
-      const base = f.path.split("/").pop()?.toLowerCase() ?? "";
-      return lower.includes(f.path.toLowerCase()) || (base.length > 2 && lower.includes(base));
-    })
-    .slice(0, 4);
-}
-
 export function CodePage() {
   const { t } = useLocale();
   const c = t.code;
-  const { messages, persistMessages, sessionId } = useCode();
+  const { user } = useAuth();
+  const scope = userStorageScope(user?.username);
+  const { messages, persistMessages, sessionId, mode, setMode, modelId, setModelId } = useCode();
+
   const [dirName, setDirName] = useState("");
-  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [files, setFiles] = useState<CodeFileEntry[]>([]);
   const [activePath, setActivePath] = useState("");
   const [content, setContent] = useState("");
   const [activeHandle, setActiveHandle] = useState<FileSystemFileHandle | null>(null);
@@ -80,6 +67,10 @@ export function CodePage() {
   const [aiNotice, setAiNotice] = useState("");
   const [agentOpen, setAgentOpen] = useState(true);
   const [agentWidth, setAgentWidth] = useState(AGENT_DEFAULT);
+  const [projectLoading, setProjectLoading] = useState(true);
+  const [projectBound, setProjectBound] = useState(false);
+
+  const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
   const aiEndRef = useRef<HTMLDivElement>(null);
   const layoutRef = useRef<HTMLDivElement>(null);
 
@@ -87,52 +78,199 @@ export function CodePage() {
     aiEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, aiLoading]);
 
-  const pickFolder = async () => {
-    if (!("showDirectoryPicker" in window)) {
-      alert(c.pickFolderHint);
-      return;
-    }
-    try {
-      const dir = await (window as Window & { showDirectoryPicker: () => Promise<DirHandle> }).showDirectoryPicker();
-      setDirName(dir.name);
-      setFiles(await listFiles(dir));
-      closeFile();
-      setAiNotice("");
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      throw err;
-    }
-  };
+  const refreshFiles = useCallback(async () => {
+    const root = dirHandleRef.current;
+    if (!root) return [];
+    const next = await listProjectFiles(root);
+    setFiles(next);
+    return next;
+  }, []);
 
-  const openFile = async (path: string, handle: FileSystemFileHandle) => {
-    const text = await readText(handle, 512_000);
-    setActivePath(path);
-    setActiveHandle(handle);
-    setContent(text);
-    setSaved(false);
-  };
+  const openFile = useCallback(
+    async (path: string, handle: FileSystemFileHandle) => {
+      const text = await readProjectText(handle, 512_000);
+      setActivePath(path);
+      setActiveHandle(handle);
+      setContent(text);
+      setSaved(false);
+      saveLastActivePath(scope, path);
+    },
+    [scope]
+  );
 
   const closeFile = useCallback(() => {
     setActivePath("");
     setActiveHandle(null);
     setContent("");
     setSaved(false);
-  }, []);
+    saveLastActivePath(scope, "");
+  }, [scope]);
+
+  const bindProject = useCallback(
+    async (dir: FileSystemDirectoryHandle, notice?: string) => {
+      dirHandleRef.current = dir;
+      setDirName(dir.name);
+      setProjectBound(true);
+      const listed = await listProjectFiles(dir);
+      setFiles(listed);
+      closeFile();
+      setAiNotice(notice || "");
+      await saveProjectHandle(scope, dir);
+
+      const lastPath = loadLastActivePath(scope);
+      if (lastPath) {
+        const entry = listed.find((f) => f.path === lastPath);
+        if (entry) {
+          await openFile(entry.path, entry.handle);
+        }
+      }
+    },
+    [closeFile, openFile, scope]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    dirHandleRef.current = null;
+    setProjectBound(false);
+    setDirName("");
+    setFiles([]);
+    closeFile();
+    setProjectLoading(true);
+
+    (async () => {
+      if (!supportsCodeProject()) {
+        if (!cancelled) setProjectLoading(false);
+        return;
+      }
+      try {
+        const handle = await loadProjectHandle(scope);
+        if (!handle || cancelled) return;
+        const ok = await verifyProjectPermission(handle);
+        if (!ok) {
+          if (!cancelled) {
+            setAiNotice(c.projectRestoreFailed);
+            setTimeout(() => setAiNotice(""), 4000);
+          }
+          return;
+        }
+        if (!cancelled) {
+          await bindProject(handle, c.projectRestored);
+          setTimeout(() => setAiNotice(""), 3000);
+        }
+      } catch {
+        if (!cancelled) {
+          setAiNotice(c.projectRestoreFailed);
+          setTimeout(() => setAiNotice(""), 4000);
+        }
+      } finally {
+        if (!cancelled) setProjectLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bindProject, closeFile, c.projectRestoreFailed, c.projectRestored, scope]);
+
+  const pickFolder = async () => {
+    if (!supportsCodeProject()) {
+      alert(c.pickFolderHint);
+      return;
+    }
+    try {
+      const dir = await (
+        window as unknown as Window & { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }
+      ).showDirectoryPicker();
+      const ok = await verifyProjectPermission(dir);
+      if (!ok) {
+        alert(c.projectRestoreFailed);
+        return;
+      }
+      await bindProject(dir);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      throw err;
+    }
+  };
 
   const saveFile = useCallback(async () => {
     if (!activeHandle) return;
-    await writeFile(activeHandle, content);
+    await writeProjectFile(activeHandle, content);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }, [activeHandle, content]);
 
+  const createFile = async () => {
+    const root = dirHandleRef.current;
+    if (!root) return;
+    const raw = window.prompt(c.newFilePrompt);
+    if (!raw?.trim()) return;
+    try {
+      const entry = await createProjectFile(root, raw.trim(), "");
+      const next = await refreshFiles();
+      const found = next.find((f) => f.path === entry.path) ?? entry;
+      await openFile(found.path, found.handle);
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      if (code === "exists") alert(c.newFileExists);
+      else if (code === "invalid_path") alert(c.newFileInvalid);
+      else throw err;
+    }
+  };
+
+  const deletePath = useCallback(
+    async (path: string, type: "file" | "dir") => {
+      const root = dirHandleRef.current;
+      if (!root) return;
+      const msg =
+        type === "dir"
+          ? c.confirmDeleteFolder.replace("{path}", path)
+          : c.confirmDeleteFile.replace("{path}", path);
+      if (!window.confirm(msg)) return;
+
+      try {
+        await deleteProjectPath(root, path, type === "dir");
+        if (type === "file" && activePath === path) {
+          closeFile();
+        } else if (type === "dir" && activePath && (activePath === path || activePath.startsWith(`${path}/`))) {
+          closeFile();
+        }
+        await refreshFiles();
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "NotAllowedError") {
+          alert(c.projectRestoreFailed);
+          return;
+        }
+        throw err;
+      }
+    },
+    [activePath, c.confirmDeleteFile, c.confirmDeleteFolder, c.projectRestoreFailed, closeFile, refreshFiles]
+  );
+
   const applyEdits = useCallback(
     async (edits: { path: string; content: string }[]) => {
+      const root = dirHandleRef.current;
+      if (!root) return;
+
       let applied = 0;
       for (const edit of edits) {
-        const entry = files.find((f) => f.path === edit.path);
-        if (!entry) continue;
-        await writeFile(entry.handle, edit.content);
+        let entry = files.find((f) => f.path === edit.path);
+        if (!entry) {
+          try {
+            const handle = await getProjectFileHandle(root, edit.path, true);
+            await writeProjectFile(handle, edit.content);
+            applied += 1;
+            if (activePath === edit.path) {
+              setContent(edit.content);
+              setSaved(true);
+              setTimeout(() => setSaved(false), 2000);
+            }
+            continue;
+          } catch {
+            continue;
+          }
+        }
+        await writeProjectFile(entry.handle, edit.content);
         applied += 1;
         if (activePath === edit.path) {
           setContent(edit.content);
@@ -140,12 +278,14 @@ export function CodePage() {
           setTimeout(() => setSaved(false), 2000);
         }
       }
+
       if (applied > 0) {
+        await refreshFiles();
         setAiNotice(c.aiApplied.replace("{count}", String(applied)));
         setTimeout(() => setAiNotice(""), 3000);
       }
     },
-    [activePath, c.aiApplied, files]
+    [activePath, c.aiApplied, files, refreshFiles]
   );
 
   const startResize = (e: React.MouseEvent) => {
@@ -168,7 +308,7 @@ export function CodePage() {
     e?.preventDefault();
     const text = aiInput.trim();
     if (!text || aiLoading) return;
-    if (!dirName || files.length === 0) {
+    if (!dirHandleRef.current || !dirName) {
       setAiNotice(c.aiNoProject);
       setTimeout(() => setAiNotice(""), 2500);
       return;
@@ -188,7 +328,7 @@ export function CodePage() {
     }
     for (const entry of matchContextFiles(text, files, activePath)) {
       try {
-        contextFiles.push({ path: entry.path, content: await readText(entry.handle) });
+        contextFiles.push({ path: entry.path, content: await readProjectText(entry.handle) });
       } catch {
         /* skip */
       }
@@ -202,6 +342,8 @@ export function CodePage() {
         fileContent: activePath ? content : "",
         contextFiles,
         history,
+        mode,
+        modelId: modelId === "auto" ? "" : modelId,
       });
       const reply = (res.reply || t.common.noData).trim();
       persistMessages([...nextMsgs, { role: "assistant" as const, content: reply }], dirName);
@@ -214,7 +356,25 @@ export function CodePage() {
     }
   };
 
-  const hasProject = Boolean(dirName && files.length);
+  const hasProject = projectBound && Boolean(dirName);
+  const fileTree = useMemo(() => buildFileTree(files), [files]);
+
+  const showAvatarFor = (role: "user" | "assistant", idx: number) => {
+    if (idx === 0) return true;
+    return messages[idx - 1]?.role !== role;
+  };
+
+  const loadingShowsAvatar =
+    messages.length === 0 || messages[messages.length - 1]?.role !== "assistant";
+
+  if (projectLoading && !hasProject) {
+    return (
+      <div className="flex h-full items-center justify-center bg-mimo-warm text-sm text-mimo-muted">
+        <Loader2 size={18} className="mr-2 animate-spin text-mimo-accent" />
+        {c.loadingProject}
+      </div>
+    );
+  }
 
   return (
     <div className="code-workspace flex h-full min-h-0 flex-col bg-mimo-warm">
@@ -228,6 +388,9 @@ export function CodePage() {
           {c.openProject}
         </button>
         <span className="truncate text-xs text-mimo-muted">{dirName || c.noFolder}</span>
+        {aiNotice && !hasProject && (
+          <span className="truncate text-[11px] text-mimo-accent">{aiNotice}</span>
+        )}
         {!agentOpen && (
           <button
             type="button"
@@ -260,26 +423,42 @@ export function CodePage() {
         </div>
       ) : (
         <div ref={layoutRef} className="flex min-h-0 flex-1">
-          <aside className="flex w-[220px] shrink-0 flex-col border-r border-mimo-border bg-white">
-            <p className="border-b border-mimo-border px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-mimo-muted">
-              {c.files}
-            </p>
-            <ul className="min-h-0 flex-1 overflow-y-auto text-xs">
-              {files.map((f) => (
-                <li key={f.path}>
-                  <button
-                    type="button"
-                    className={`flex w-full items-center gap-1 truncate px-3 py-1.5 text-left hover:bg-mimo-warm ${
-                      activePath === f.path ? "bg-mimo-warm font-medium text-mimo-text" : "text-mimo-muted"
-                    }`}
-                    onClick={() => void openFile(f.path, f.handle)}
-                  >
-                    <ChevronRight size={12} className="shrink-0 opacity-40" />
-                    {f.path}
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <aside className="flex w-[240px] shrink-0 flex-col border-r border-mimo-border bg-white">
+            <div className="flex items-center gap-1 border-b border-mimo-border px-2 py-2">
+              <p className="min-w-0 flex-1 truncate text-[11px] font-medium uppercase tracking-wide text-mimo-muted">
+                {c.files}
+              </p>
+              <button
+                type="button"
+                className="rounded p-1 text-mimo-muted hover:bg-mimo-warm hover:text-mimo-text"
+                title={c.newFile}
+                aria-label={c.newFile}
+                onClick={() => void createFile()}
+              >
+                <FilePlus size={14} />
+              </button>
+              <button
+                type="button"
+                className="rounded p-1 text-mimo-muted hover:bg-mimo-warm hover:text-mimo-text"
+                title={c.refreshFiles}
+                aria-label={c.refreshFiles}
+                onClick={() => void refreshFiles()}
+              >
+                <RefreshCw size={14} />
+              </button>
+            </div>
+            {files.length === 0 ? (
+              <p className="px-3 py-4 text-center text-mimo-muted">{c.emptyProject}</p>
+            ) : (
+              <CodeFileTree
+                nodes={fileTree}
+                activePath={activePath}
+                onOpenFile={(path, handle) => void openFile(path, handle)}
+                onDeletePath={(path, type) => void deletePath(path, type)}
+                deleteFileLabel={c.deleteFile}
+                deleteFolderLabel={c.deleteFolder}
+              />
+            )}
           </aside>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
@@ -307,17 +486,22 @@ export function CodePage() {
                     {saved ? c.saved : c.save}
                   </button>
                 </div>
-                <textarea
-                  className="min-h-0 flex-1 resize-none border-0 bg-[#fafafa] p-4 font-mono text-xs leading-6 text-mimo-text outline-none"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  spellCheck={false}
-                />
+                <div className="min-h-0 flex-1">
+                  <CodeMonacoEditor path={activePath} value={content} onChange={setContent} />
+                </div>
               </>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 text-center">
                 <p className="text-sm text-mimo-muted">{c.emptyEditor}</p>
                 <p className="mt-2 max-w-sm text-xs leading-5 text-mimo-muted">{c.agentHint}</p>
+                <button
+                  type="button"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-mimo-border px-3 py-1.5 text-xs hover:bg-mimo-warm"
+                  onClick={() => void createFile()}
+                >
+                  <FilePlus size={14} />
+                  {c.newFile}
+                </button>
               </div>
             )}
           </div>
@@ -331,70 +515,112 @@ export function CodePage() {
                 aria-orientation="vertical"
               />
               <aside
-                className="flex min-h-0 shrink-0 flex-col border-l border-mimo-border bg-white"
+                className="code-agent-panel flex min-h-0 shrink-0 flex-col"
                 style={{ width: agentWidth }}
               >
-                <div className="flex items-center gap-2 border-b border-mimo-border px-3 py-2">
-                  <Sparkles size={14} className="text-mimo-accent" />
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium">{c.agentPanel}</span>
+                <div className="code-agent-header flex items-center gap-2.5 px-3 py-2.5">
+                  <span className="code-agent-header-icon" aria-hidden>
+                    <Code2 size={15} strokeWidth={2} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-tight text-mimo-text">
+                    {c.agentPanel}
+                  </span>
                   <button
                     type="button"
-                    className="rounded p-1 text-mimo-muted hover:bg-mimo-warm"
+                    className="code-agent-icon-btn"
                     aria-label={c.collapseAgent}
                     onClick={() => setAgentOpen(false)}
                   >
-                    <PanelRightClose size={16} />
+                    <PanelRightClose size={15} />
                   </button>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-                  {messages.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-mimo-border bg-mimo-warm/50 px-4 py-6 text-center">
-                      <p className="text-xs leading-6 text-mimo-muted">{c.agentHint}</p>
+                <CodeAgentToolbar
+                  mode={mode}
+                  modelId={modelId}
+                  onModeChange={setMode}
+                  onModelChange={setModelId}
+                />
+
+                <div className="code-agent-chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-3">
+                  {messages.length === 0 && !aiLoading && (
+                    <div className="code-agent-empty">
+                      <span className="code-agent-empty-icon" aria-hidden>
+                        <Code2 size={20} strokeWidth={1.5} />
+                      </span>
+                      <p className="text-[13px] font-medium text-mimo-text">{c.aiTitle}</p>
+                      <p className="mt-1.5 text-[12px] leading-[1.65] text-mimo-muted">{c.agentHint}</p>
                     </div>
                   )}
-                  <div className="space-y-4">
-                    {messages.map((m, i) => (
-                      <div
-                        key={`${sessionId}-${i}`}
-                        className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[95%] rounded-2xl px-3.5 py-2.5 text-xs leading-6 ${
-                            m.role === "user"
-                              ? "bg-mimo-cta text-white"
-                              : "bg-mimo-warm text-mimo-text ring-1 ring-mimo-border/60"
-                          }`}
+                  <div className="code-agent-chat-list">
+                    {messages.map((m, i) => {
+                      const showAvatar = showAvatarFor(m.role, i);
+                      const continued = !showAvatar;
+                      return (
+                        <article
+                          key={`${sessionId}-${i}`}
+                          className={`code-agent-chat-row ${
+                            m.role === "user" ? "code-agent-chat-row-user" : ""
+                          } ${continued ? "code-agent-chat-row-continued" : ""}`}
                         >
-                          {m.role === "assistant" ? (
-                            <ChatMessageContent text={m.content} />
-                          ) : (
-                            m.content
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                          <div className="code-agent-avatar">
+                            {showAvatar ? (
+                              m.role === "user" ? (
+                                <UserStudioAvatar />
+                              ) : (
+                                <AgentStudioAvatar />
+                              )
+                            ) : (
+                              <StudioAvatarPlaceholder />
+                            )}
+                          </div>
+                          <div
+                            className={`code-agent-bubble ${
+                              m.role === "user"
+                                ? "code-agent-bubble-user"
+                                : "code-agent-bubble-assistant"
+                            }`}
+                          >
+                            {m.role === "assistant" ? (
+                              <ChatMessageContent text={m.content} variant="studio" />
+                            ) : (
+                              <p className="whitespace-pre-wrap text-[13px] leading-[1.7]">{m.content}</p>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
                     {aiLoading && (
-                      <div className="flex items-center gap-2 text-xs text-mimo-muted">
-                        <Loader2 size={14} className="animate-spin text-mimo-accent" />
-                        {c.aiThinking}
-                      </div>
+                      <article
+                        className={`code-agent-chat-row ${
+                          loadingShowsAvatar ? "" : "code-agent-chat-row-continued"
+                        }`}
+                      >
+                        <div className="code-agent-avatar">
+                          {loadingShowsAvatar ? <AgentStudioAvatar /> : <StudioAvatarPlaceholder />}
+                        </div>
+                        <div className="code-agent-bubble code-agent-bubble-assistant">
+                          <div className="inline-flex items-center gap-2 text-[13px] text-mimo-muted">
+                            <Loader2 size={14} className="animate-spin text-mimo-accent" />
+                            {c.aiThinking}
+                          </div>
+                        </div>
+                      </article>
                     )}
                   </div>
                   <div ref={aiEndRef} />
                 </div>
 
                 {aiNotice && (
-                  <p className="border-t border-mimo-border px-3 py-2 text-[11px] text-mimo-accent">{aiNotice}</p>
+                  <p className="code-agent-notice border-t border-mimo-border/70 px-3 py-2 text-[11px] text-mimo-accent">
+                    {aiNotice}
+                  </p>
                 )}
 
-                <form
-                  className="border-t border-mimo-border bg-mimo-warm/30 p-3"
-                  onSubmit={(e) => void sendAi(e)}
-                >
-                  <div className="rounded-xl border border-mimo-border bg-white shadow-sm focus-within:ring-2 focus-within:ring-mimo-accent/25">
+                <form className="code-agent-compose" onSubmit={(e) => void sendAi(e)}>
+                  <div className="code-agent-input-wrap">
                     <textarea
-                      className="w-full resize-none border-0 bg-transparent px-3 py-2.5 text-xs leading-5 outline-none"
+                      className="code-agent-input"
                       rows={3}
                       placeholder={c.aiPlaceholder}
                       value={aiInput}
@@ -406,16 +632,19 @@ export function CodePage() {
                         }
                       }}
                     />
-                    <div className="flex justify-end border-t border-mimo-border/60 px-2 py-1.5">
-                      <button
-                        type="submit"
-                        disabled={aiLoading || !aiInput.trim()}
-                        className="inline-flex items-center gap-1 rounded-lg bg-mimo-cta px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-                      >
-                        {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <SendHorizonal size={14} />}
-                        {c.aiSend}
-                      </button>
-                    </div>
+                    <button
+                      type="submit"
+                      disabled={aiLoading || !aiInput.trim()}
+                      className="code-agent-send-btn"
+                      aria-label={c.aiSend}
+                      title={c.aiSend}
+                    >
+                      {aiLoading ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <SendHorizonal size={16} />
+                      )}
+                    </button>
                   </div>
                 </form>
               </aside>

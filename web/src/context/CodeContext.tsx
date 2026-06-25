@@ -8,6 +8,8 @@ import {
   type CodeMessage,
   type CodeSession,
 } from "@/lib/codeSessions";
+import type { CodeWorkflowMode } from "@/components/code/CodeAgentToolbar";
+import { loadCodePreferences, saveCodePreferences } from "@/lib/codePreferences";
 import { userStorageScope } from "@/lib/userScope";
 import { useAuth } from "@/context/AuthContext";
 
@@ -21,6 +23,10 @@ type CodeCtx = {
   deleteSession: (id: string) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
+  mode: CodeWorkflowMode;
+  setMode: (m: CodeWorkflowMode) => void;
+  modelId: string;
+  setModelId: (id: string) => void;
 };
 
 const CodeContext = createContext<CodeCtx | null>(null);
@@ -32,6 +38,33 @@ export function CodeProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<CodeSession[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<CodeMessage[]>([]);
+  const [prefs, setPrefs] = useState(() => loadCodePreferences(scope));
+
+  const setMode = useCallback(
+    (mode: CodeWorkflowMode) => {
+      setPrefs((p) => {
+        const next = { ...p, mode };
+        saveCodePreferences(scope, next);
+        return next;
+      });
+    },
+    [scope]
+  );
+
+  const setModelId = useCallback(
+    (modelId: string) => {
+      setPrefs((p) => {
+        const next = { ...p, modelId };
+        saveCodePreferences(scope, next);
+        return next;
+      });
+    },
+    [scope]
+  );
+
+  useEffect(() => {
+    setPrefs(loadCodePreferences(scope));
+  }, [scope]);
 
   const persist = useCallback(
     (nextSessions: CodeSession[]) => {
@@ -111,6 +144,10 @@ export function CodeProvider({ children }: { children: ReactNode }) {
         deleteSession,
         sidebarOpen,
         setSidebarOpen,
+        mode: prefs.mode,
+        setMode,
+        modelId: prefs.modelId,
+        setModelId,
       }}
     >
       {children}
