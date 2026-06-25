@@ -1,0 +1,160 @@
+import json
+import os
+import re
+import requests
+
+API_BASE = "https://api.deepseek.com"
+API_KEY = os.environ.get("DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY")  # 请在环境变量中设置 DEEPSEEK_API_KEY
+MODEL_NAME = "deepseek-v4-pro"
+
+BOARD_SIZE = 15
+EMPTY = 0
+PLAYER = 1  # 你 ●
+AI = 2      # LLM ○
+
+
+def init_board():
+    return [[EMPTY] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+
+
+def print_board(board):
+    print("   " + " ".join(f"{i:2d}" for i in range(BOARD_SIZE)))
+    for row_idx, row in enumerate(board):
+        symbols = ["●" if v == PLAYER else "○" if v == AI else "·" for v in row]
+        print(f"{row_idx:2d} " + " ".join(symbols))
+
+
+def is_valid_pos(board, row, col):
+    return 0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE and board[row][col] == EMPTY
+
+
+def is_win(board, piece):
+    for r in range(BOARD_SIZE):
+        for c in range(BOARD_SIZE - 4):
+            if all(board[r][c + d] == piece for d in range(5)):
+                return True
+    for r in range(BOARD_SIZE - 4):
+        for c in range(BOARD_SIZE):
+            if all(board[r + d][c] == piece for d in range(5)):
+                return True
+    for r in range(BOARD_SIZE - 4):
+        for c in range(BOARD_SIZE - 4):
+            if all(board[r + d][c + d] == piece for d in range(5)):
+                return True
+    for r in range(4, BOARD_SIZE):
+        for c in range(BOARD_SIZE - 4):
+            if all(board[r - d][c + d] == piece for d in range(5)):
+                return True
+    return False
+
+
+def is_board_full(board):
+    return all(cell != EMPTY for row in board for cell in row)
+
+
+def extract_json(text):
+    text = re.sub(r"```(?:json)?", "", text, flags=re.IGNORECASE)
+    text = text.strip()
+    if not text:
+        raise ValueError("LLM 返回为空")
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidate = text[start:end + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+    return json.loads(text)
+
+
+def board_to_prompt(board):
+    return "\n".join("".join("●" if v == PLAYER else "○" if v == AI else "·" for v in row) for row in board)
+
+
+def get_ai_move(board):
+    prompt = f"""
+你是专业五子棋AI，只回答JSON，不要解释。
+当前棋盘（15x15）：
+{board_to_prompt(board)}
+符号说明：●=1（玩家），○=2（LLM）。
+请返回一个落子位置，格式为：{{"row": 行号, "col": 列号}}
+行号和列号范围都是 0-14。
+"""
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": MODEL_NAME,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1
+    }
+
+    try:
+        resp = requests.post(f"{API_BASE}/chat/completions", headers=headers, json=data, timeout=60)
+        print(f"LLM 请求成功，状态码：{resp.status_code}")
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        res = extract_json(content)
+        row = res.get("row", res.get("x"))
+        col = res.get("col", res.get("y"))
+        if isinstance(row, int) and isinstance(col, int) and is_valid_pos(board, row, col):
+            return row, col
+        print(f"LLM 返回位置无效：{res}，改为随机落子")
+    except Exception as exc:
+        print(f"LLM 调用失败：{exc}，改为随机落子")
+
+    for r in range(BOARD_SIZE):
+        for c in range(BOARD_SIZE):
+            if is_valid_pos(board, r, c):
+                return r, c
+    return BOARD_SIZE // 2, BOARD_SIZE // 2
+
+
+def player_input(board):
+    while True:
+        try:
+            row = int(input("请输入行号 (0-14)："))
+            col = int(input("请输入列号 (0-14)："))
+            if is_valid_pos(board, row, col):
+                return row, col
+            print("位置不合法或已被占用，请重新输入。")
+        except ValueError:
+            print("请输入有效的数字。")
+
+
+def main():
+    print("======== LLM 五子棋对战 ========")
+    print("你：●   AI：○")
+    board = init_board()
+    print_board(board)
+
+    while True:
+        print("\n=== 你的回合 ===")
+        row, col = player_input(board)
+        board[row][col] = PLAYER
+        print_board(board)
+        if is_win(board, PLAYER):
+            print("\n🎉 你赢了！")
+            break
+        if is_board_full(board):
+            print("\n🤝 平局")
+            break
+
+        print("\n=== LLM 思考中... ===")
+        ai_row, ai_col = get_ai_move(board)
+        board[ai_row][ai_col] = AI
+        print(f"AI 落子：({ai_row},{ai_col})")
+        print_board(board)
+        if is_win(board, AI):
+            print("\n💻 LLM 赢了！")
+            break
+        if is_board_full(board):
+            print("\n🤝 平局")
+            break
+
+
+if __name__ == "__main__":
+    main()
