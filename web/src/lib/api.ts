@@ -161,6 +161,15 @@ export const api = {
       body: JSON.stringify(body),
     }),
   invitesOverview: () => request<{ stats: InviteStats; items: InviteRow[] }>("/api/invites"),
+  achievementShare: (achievementId: string, origin: string) =>
+    request<AchievementShareResult>(
+      `/api/gamification/achievements/${encodeURIComponent(achievementId)}/share`,
+      { method: "POST", body: JSON.stringify({ origin }) }
+    ),
+  achievementSharePublic: (token: string) =>
+    request<AchievementSharePublicView>(
+      `/api/gamification/share/achievement/${encodeURIComponent(token)}`
+    ),
   pluginsList: () => request<{ items: PluginRow[] }>("/api/plugins"),
   adminSearchUsers: (q = "") =>
     request<{ items: AdminUserRow[] }>(`/api/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
@@ -678,6 +687,30 @@ export interface WheelSpinResult {
   prize: { id: string; label: string; points: number };
   cost: number;
   balance: number;
+}
+
+export interface AchievementShareResult {
+  token: string;
+  share_url: string;
+  share_text: string;
+  card_url: string;
+  achievement: { id: string; name: string; desc: string; icon: string };
+}
+
+export interface AchievementSharePublicView {
+  achievement: {
+    id: string;
+    name: string;
+    desc: string;
+    icon: string;
+    unlocked_at: string | null;
+  };
+  user: {
+    display_name: string;
+    public_id: string;
+    level: number;
+    rating_name: string;
+  };
 }
 
 export interface PointsLedgerRow {

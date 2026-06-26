@@ -483,3 +483,115 @@ def update_profile(username: str, *, profile_bg: str | None = None, profile_them
         if profile_theme:
             conn.execute("UPDATE user_gamification SET profile_theme = ? WHERE user_id = ?", (profile_theme, user_id))
     return get_engagement_summary(username)
+
+
+def _normalize_origin(origin: str) -> str:
+    base = (origin or "").strip().rstrip("/")
+    if not base:
+        return ""
+    if not base.startswith(("http://", "https://")):
+        base = f"https://{base}"
+    return base
+
+
+def create_achievement_share(username: str, achievement_id: str, *, origin: str = "") -> dict[str, Any]:
+    """生成成就公开分享链接（须已解锁）."""
+    aid = str(achievement_id or "").strip()
+    if aid not in ACHIEVEMENTS:
+        raise ValueError("成就不存在")
+    user_id = _username_to_user_id(username)
+    if not user_id:
+        raise ValueError("用户不存在")
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?",
+            (user_id, aid),
+        ).fetchone()
+    if not row:
+        raise ValueError("尚未解锁该成就，无法分享")
+
+    from sensehub.util.share_tokens import create_achievement_share_token
+
+    token = create_achievement_share_token(user_id=user_id, achievement_id=aid)
+    base = _normalize_origin(origin) or "http://127.0.0.1:5173"
+    share_path = f"/share/achievement/{token}"
+    share_url = f"{base}{share_path}"
+    meta = ACHIEVEMENTS[aid]
+    share_text = f"我在灵枢 SenseHub 解锁了成就「{meta['name']}」— {meta['desc']} {share_url}"
+    return {
+        "token": token,
+        "share_url": share_url,
+        "share_text": share_text,
+        "card_url": f"/api/gamification/share/achievement/{token}/card.png",
+        "achievement": {"id": aid, "name": meta["name"], "desc": meta["desc"], "icon": meta["icon"]},
+    }
+
+
+def get_achievement_share_public(token: str) -> dict[str, Any]:
+    """公开读取成就分享页数据（无需登录）."""
+    from sensehub.util.share_tokens import decode_achievement_share_token
+
+    decoded = decode_achievement_share_token(token)
+    if not decoded:
+        raise ValueError("分享链接无效或已过期")
+    user_id, aid = decoded
+    if aid not in ACHIEVEMENTS:
+        raise ValueError("成就不存在")
+    with get_connection() as conn:
+        unlocked = conn.execute(
+            "SELECT unlocked_at FROM user_achievements WHERE user_id = ? AND achievement_id = ?",
+            (user_id, aid),
+        ).fetchone()
+        if not unlocked:
+            raise ValueError("成就分享已失效")
+        profile = conn.execute(
+            """
+            SELECT w.public_id, w.total_earned, g.level, g.xp, u.display_name
+            FROM user_wallets w
+            LEFT JOIN user_gamification g ON g.user_id = w.user_id
+            LEFT JOIN users u ON u.user_id = w.user_id
+            WHERE w.user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    if not profile:
+        raise ValueError("用户不存在")
+    meta = ACHIEVEMENTS[aid]
+    xp = int(profile["xp"] or 0)
+    progress = level_progress(xp if xp else int(profile["total_earned"] or 0) // 2)
+    display = (profile["display_name"] or profile["public_id"] or "灵枢用户")[:24]
+    return {
+        "achievement": {
+            "id": aid,
+            "name": meta["name"],
+            "desc": meta["desc"],
+            "icon": meta["icon"],
+            "unlocked_at": unlocked["unlocked_at"],
+        },
+        "user": {
+            "display_name": display,
+            "public_id": profile["public_id"],
+            "level": progress["level"],
+            "rating_name": progress["rating_name"],
+        },
+    }
+
+
+def render_achievement_share_card_png(token: str, *, share_url: str = "") -> bytes:
+    view = get_achievement_share_public(token)
+    from sensehub.util.share_card import render_achievement_share_card
+
+    url = (share_url or "").strip()
+    if not url:
+        url = f"http://127.0.0.1:5173/share/achievement/{token}"
+    ach = view["achievement"]
+    user = view["user"]
+    return render_achievement_share_card(
+        display_name=user["display_name"],
+        public_id=user["public_id"],
+        achievement_name=ach["name"],
+        achievement_desc=ach["desc"],
+        level=int(user["level"] or 1),
+        rating_name=str(user["rating_name"] or ""),
+        share_url=url,
+    )

@@ -41,6 +41,25 @@ def _write_xlsx(path: Path, headers: list[str], rows: list[list[Any]]) -> None:
     wb.save(str(path))
 
 
+def _normalize_slide_texts(slides: list[Any]) -> list[str]:
+    texts: list[str] = []
+    for item in slides:
+        if isinstance(item, dict):
+            title = str(item.get("title") or "").strip()
+            body = str(item.get("content") or item.get("body") or "").strip()
+            if title and body:
+                texts.append(f"{title}\n{body}")
+            elif title:
+                texts.append(title)
+            elif body:
+                texts.append(body)
+            continue
+        text = str(item).strip()
+        if text:
+            texts.append(text)
+    return texts
+
+
 def _write_pptx(path: Path, title: str, slides: list[str]) -> None:
     from pptx import Presentation
 
@@ -111,7 +130,7 @@ def generate_document(params: dict[str, Any]) -> dict[str, Any]:
     elif fmt in {"pptx", "ppt"}:
         slides = params.get("slides")
         if isinstance(slides, list) and slides:
-            slide_texts = [str(s) for s in slides]
+            slide_texts = _normalize_slide_texts(slides)
         else:
             slide_texts = [body] if body else ([title] if title else [" "])
         try:

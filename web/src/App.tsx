@@ -18,6 +18,7 @@ import { ModelShowcasePage } from "@/pages/ModelShowcasePage";
 import { UpdatesPage } from "@/pages/UpdatesPage";
 import { UpdateDetailPage } from "@/pages/UpdateDetailPage";
 import { TokenPlanPage } from "@/pages/TokenPlanPage";
+import { ShareAchievementPage } from "@/pages/ShareAchievementPage";
 import { ContactPage } from "@/pages/ContactPage";
 import { ProductConsolePage } from "@/pages/ProductConsolePage";
 import { ProductStudioPage } from "@/pages/ProductStudioPage";
@@ -67,6 +68,7 @@ function AppRoutes() {
         <Route path="updates" element={<UpdatesPage />} />
         <Route path="updates/:slug" element={<UpdateDetailPage />} />
         <Route path="contact" element={<ContactPage />} />
+        <Route path="share/achievement/:token" element={<ShareAchievementPage />} />
         <Route path="token-plan" element={<TokenPlanPage />} />
         <Route path="billing" element={<Navigate to="/token-plan" replace />} />
         <Route path="legal/privacy" element={<PrivacyPolicyPage />} />

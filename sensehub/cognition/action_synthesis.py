@@ -102,6 +102,26 @@ def _is_deliverable_body(text: str, evidence: list[dict[str, Any]] | None = None
     return len(text.strip()) >= 20
 
 
+def _generate_document_params_ready(params: dict[str, Any]) -> bool:
+    """generate_document 已带可交付结构时，不必再走 content 合成."""
+    fmt = str(params.get("format") or params.get("type") or "").lower().strip().lstrip(".")
+    if fmt in {"pptx", "ppt"}:
+        slides = params.get("slides")
+        if isinstance(slides, list) and slides:
+            return True
+    if fmt in {"xlsx", "excel"}:
+        rows = params.get("rows")
+        if isinstance(rows, list) and rows:
+            return True
+    title = str(params.get("title") or "").strip()
+    body = str(params.get("content") or params.get("body") or "").strip()
+    if body and _is_deliverable_body(body):
+        return True
+    if title and len(title) >= 4 and not _looks_like_placeholder(title):
+        return True
+    return False
+
+
 def needs_content_synthesis(
     tool: str,
     params: dict[str, Any],
@@ -110,6 +130,8 @@ def needs_content_synthesis(
     """已有取证结果且正文缺失/非成品时，须走 LLM 合成."""
     field = CONTENT_FIELD_BY_TOOL.get(tool)
     if not field or not evidence:
+        return False
+    if tool == "generate_document" and _generate_document_params_ready(params):
         return False
     text = _field_value(params, field)
     if not text:

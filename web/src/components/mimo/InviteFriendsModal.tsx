@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, X } from "lucide-react";
+import { Download, ExternalLink, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
+import { fetchAuthedBlobUrl, siteOrigin } from "@/lib/authedAsset";
 import { InviteProgressPanel, InviteRulesPanel } from "@/components/mimo/InvitePanels";
 
 type Tab = "invite" | "progress" | "rules";
@@ -13,6 +14,7 @@ export function InviteFriendsModal({ open, onClose }: { open: boolean; onClose: 
   const ref = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("invite");
   const [copied, setCopied] = useState(false);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -23,16 +25,50 @@ export function InviteFriendsModal({ open, onClose }: { open: boolean; onClose: 
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-
   const code = user?.invite_code || "";
   const link = `${window.location.origin}/login?invite=${code}`;
+
+  useEffect(() => {
+    if (!open || !token || !code) {
+      setQrUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    fetchAuthedBlobUrl(`/api/invites/qrcode.png?origin=${encodeURIComponent(siteOrigin())}`)
+      .then((url) => {
+        objectUrl = url;
+        if (!cancelled) setQrUrl(url);
+        else URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [open, token, code]);
+
+  if (!open) return null;
 
   const copyLink = async () => {
     if (!code) return;
     await navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const downloadQr = () => {
+    if (!qrUrl) return;
+    const a = document.createElement("a");
+    a.href = qrUrl;
+    a.download = `sensehub-invite-${code}.png`;
+    a.rel = "noopener";
+    a.click();
   };
 
   const tabs: { id: Tab; label: string }[] = [
@@ -98,7 +134,33 @@ export function InviteFriendsModal({ open, onClose }: { open: boolean; onClose: 
                 <div className="mt-8">
                   <p className="text-xs text-mimo-muted">{t.invite.yourCode}</p>
                   <p className="mt-1 font-mono text-lg font-semibold">{code}</p>
-                  <p className="mt-2 break-all font-mono text-[11px] text-mimo-muted">{link}</p>
+
+                  <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-mimo-border bg-surface p-4">
+                    <p className="text-xs font-medium text-mimo-muted">{t.invite.qrTitle}</p>
+                    {qrUrl ? (
+                      <img
+                        src={qrUrl}
+                        alt={t.invite.qrTitle}
+                        className="h-44 w-44 rounded-lg border border-mimo-border bg-white p-2"
+                      />
+                    ) : (
+                      <div className="flex h-44 w-44 items-center justify-center rounded-lg border border-dashed border-mimo-border text-xs text-mimo-muted">
+                        {t.invite.qrLoading}
+                      </div>
+                    )}
+                    <p className="text-center text-[11px] text-mimo-muted">{t.invite.qrHint}</p>
+                    <button
+                      type="button"
+                      className="mimo-btn-ghost mimo-btn-sm border border-mimo-border"
+                      disabled={!qrUrl}
+                      onClick={downloadQr}
+                    >
+                      <Download size={14} className="mr-1 inline" aria-hidden />
+                      {t.invite.qrDownload}
+                    </button>
+                  </div>
+
+                  <p className="mt-4 break-all font-mono text-[11px] text-mimo-muted">{link}</p>
                   <button type="button" className="mimo-btn-cta mimo-btn-sm mt-4 w-full" onClick={() => void copyLink()}>
                     {copied ? t.invite.copied : `${t.invite.copyLink} →`}
                   </button>

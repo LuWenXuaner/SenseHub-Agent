@@ -4,12 +4,14 @@ import {
   Lock,
   Medal,
   Palette,
+  Share2,
   Sparkles,
   Star,
   Trophy,
   Zap,
 } from "lucide-react";
 import { ConsolePageFrame } from "@/components/mimo/ConsolePageFrame";
+import { AchievementShareModal } from "@/components/mimo/AchievementShareModal";
 import { useLocale } from "@/context/LocaleContext";
 import { useGamification } from "@/hooks/useGamification";
 import { useWallet } from "@/hooks/useWallet";
@@ -232,24 +234,55 @@ function WheelPanel() {
   );
 }
 
-function AchievementBadge({ row }: { row: AchievementRow }) {
+function AchievementBadge({
+  row,
+  onShare,
+}: {
+  row: AchievementRow;
+  onShare?: (row: AchievementRow) => void;
+}) {
+  const { t } = useLocale();
+  const g = t.gamification;
   const Icon = ACHIEVEMENT_ICONS[row.icon] ?? Medal;
-  return (
-    <div
-      className={`mimo-engage-badge ${row.unlocked ? "mimo-engage-badge-unlocked" : "mimo-engage-badge-locked"}`}
-      title={row.desc}
-    >
+  const inner = (
+    <>
       {row.unlocked && <span className="mimo-engage-badge-shine" aria-hidden />}
       <div className="mimo-engage-badge-icon">
         <Icon size={22} aria-hidden />
       </div>
       <span className="mimo-engage-badge-name">{row.name}</span>
-      {!row.unlocked && <Lock size={12} className="mimo-engage-badge-lock" aria-hidden />}
+      {row.unlocked ? (
+        <Share2 size={12} className="mimo-engage-badge-share" aria-hidden />
+      ) : (
+        <Lock size={12} className="mimo-engage-badge-lock" aria-hidden />
+      )}
+    </>
+  );
+
+  if (row.unlocked && onShare) {
+    return (
+      <button
+        type="button"
+        className="mimo-engage-badge mimo-engage-badge-unlocked mimo-engage-badge-btn"
+        title={`${row.desc} · ${g.shareTap}`}
+        onClick={() => onShare(row)}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={`mimo-engage-badge ${row.unlocked ? "mimo-engage-badge-unlocked" : "mimo-engage-badge-locked"}`}
+      title={row.desc}
+    >
+      {inner}
     </div>
   );
 }
 
-function AchievementGrid() {
+function AchievementGrid({ onShare }: { onShare: (row: AchievementRow) => void }) {
   const { t } = useLocale();
   const g = t.gamification;
   const { data } = useGamification();
@@ -273,7 +306,7 @@ function AchievementGrid() {
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         {data.achievements.map((a) => (
-          <AchievementBadge key={a.id} row={a} />
+          <AchievementBadge key={a.id} row={a} onShare={onShare} />
         ))}
       </div>
     </div>
@@ -422,6 +455,7 @@ export function ConsoleEngagementPage() {
   const { t } = useLocale();
   const g = t.gamification;
   const { data, loading } = useGamification();
+  const [shareTarget, setShareTarget] = useState<AchievementRow | null>(null);
 
   return (
     <ConsolePageFrame title={g.title} subtitle={g.subtitle}>
@@ -434,12 +468,17 @@ export function ConsoleEngagementPage() {
             <WheelPanel />
             <LeaderboardPanel />
           </div>
-          <AchievementGrid />
+          <AchievementGrid onShare={(row) => setShareTarget(row)} />
           <ProfileCosmetics />
         </div>
       ) : (
         <p className="text-sm text-mimo-muted">{t.common.noData}</p>
       )}
+      <AchievementShareModal
+        open={!!shareTarget}
+        achievement={shareTarget}
+        onClose={() => setShareTarget(null)}
+      />
     </ConsolePageFrame>
   );
 }

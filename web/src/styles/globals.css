@@ -3194,6 +3194,15 @@ a.mimo-docs-tab.router-link-active {
   @apply absolute right-2 top-2 text-mimo-muted;
 }
 
+.mimo-engage-badge-share {
+  @apply absolute right-2 top-2 text-primary opacity-80;
+}
+
+.mimo-engage-badge-btn {
+  @apply cursor-pointer border-0 bg-transparent p-0 text-left;
+  font: inherit;
+}
+
 .mimo-engage-podium {
   @apply mt-4 flex items-end justify-center gap-3 px-2;
 }

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 
 from sensehub.api.deps import get_current_user
 from sensehub.db import wallet as wallet_store
+from sensehub.util.qr_png import qr_png_bytes
 
 router = APIRouter(tags=["wallet"])
 
@@ -92,6 +94,31 @@ async def invites_overview(username: str = Depends(get_current_user)):
         "stats": wallet_store.invite_stats(username),
         "items": wallet_store.list_invites(username),
     }
+
+
+@router.get("/invites/qrcode.png")
+async def invites_qrcode_png(
+    request: Request,
+    origin: str = Query("", description="前端站点 origin，用于生成邀请链接"),
+    username: str = Depends(get_current_user),
+):
+    stats = wallet_store.invite_stats(username)
+    code = str(stats.get("invite_code") or "").strip()
+    if not code:
+        raise HTTPException(status_code=404, detail="邀请码不存在")
+    base = (origin or "").strip().rstrip("/")
+    if not base:
+        base = str(request.headers.get("origin") or "").strip().rstrip("/")
+    if not base:
+        base = "http://127.0.0.1:5173"
+    if not base.startswith(("http://", "https://")):
+        base = f"http://{base}"
+    link = f"{base}/login?invite={code}"
+    try:
+        png = qr_png_bytes(link)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.get("/plugins")
