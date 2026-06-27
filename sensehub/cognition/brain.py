@@ -43,7 +43,7 @@ async def orchestrate_brains(
             f"意图脑分析：{json.dumps(intent_raw, ensure_ascii=False)}"
         )
     planner = Planner()
-    plan = await planner.plan_from_context(planner_input, original_intent=text)
+    plan, from_cache = await planner.plan_from_context(planner_input, original_intent=text, intent_raw=intent_raw)
     plan = apply_sandbox_confirm_gates(plan)
     agents.append(
         {
@@ -51,6 +51,7 @@ async def orchestrate_brains(
             "model_role": "planner",
             "summary": plan.summary,
             "steps": [s.model_dump() for s in plan.steps],
+            "source": "cache" if from_cache else "llm",
         }
     )
 
@@ -65,10 +66,19 @@ async def orchestrate_brains(
         )
         raise BrainPipelineError("规划脑返回空步骤", agents=agents)
 
-    safe, reason = SafetyReviewer().review(plan)
-    agents.append({"role": "safety", "model_role": "safety", "passed": safe, "reason": reason})
-    if not safe:
-        raise BrainPipelineError(reason, agents=agents)
+    reviewer = SafetyReviewer()
+    safety = reviewer.score(plan)
+    agents.append(
+        {
+            "role": "safety",
+            "model_role": "safety",
+            "passed": safety.passed,
+            "reason": safety.reason,
+            "scores": safety.model_dump(),
+        }
+    )
+    if not safety.passed:
+        raise BrainPipelineError(safety.reason, agents=agents)
 
     try:
         validate_plan_delivery(intent_raw, plan)
@@ -96,7 +106,12 @@ def format_brain_summary(agents: list[dict[str, Any]]) -> str:
         elif role == "planner":
             parts.append(f"规划:{len(a.get('steps', []))}步")
         elif role == "safety":
-            parts.append("安全:通过" if a.get("passed") else "安全:拒绝")
+            scores = a.get("scores") or {}
+            overall = scores.get("overall")
+            if a.get("passed"):
+                parts.append(f"安全:通过({overall})" if overall is not None else "安全:通过")
+            else:
+                parts.append("安全:拒绝")
         elif role == "harness":
             parts.append("校验:通过" if a.get("passed") else "校验:改应答")
         elif role == "executor":

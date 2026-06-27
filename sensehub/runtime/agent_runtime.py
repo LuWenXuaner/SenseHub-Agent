@@ -115,7 +115,8 @@ def _build_system_prompt(user_text: str, intent_raw: dict | None) -> str:
 - finish 只陈述已验证结果；用户要「写入/保存」时不得在未执行写入工具前 finish
 - 禁止陷入“只观察不行动”：连续观察后必须转入 open_app/type_text/write_file 等执行动作
 - 需账号/扫码登录的应用（微信/钉钉等）：不代替用户登录；见登录界面则 agent_finish 提示用户先自行登录
-- 相对路径文件默认保存到用户配置的默认保存路径；用户指定了其他路径则从其指定
+- 相对路径文件默认保存到用户配置的默认交付目录；用户指定了其他路径则从其指定
+- 勿将交付物保存到沙箱工作区；仅用相对文件名即可
 - Word/Excel/PPT/海报：简单结构用 generate_document；复杂版式/海报/图表用 run_document_script(code, output_path)，脚本须写入 OUTPUT_PATH
 - 记事本纯文本可用 write_file
 - 搜索并下载图片：优先 search_and_download_image(query=关键词)；需 Edge 搜索页则 open_browser=true；分步可用 search_images → download_image
@@ -1073,6 +1074,16 @@ class AgentRuntime:
                 "step_id": step.step_id,
             }
         )
+        try:
+            from sensehub.db import tool_stats as tool_stats_repo
+
+            tool_stats_repo.record_tool_call(
+                tool=tool,
+                success=result.success,
+                duration_ms=result.duration_ms,
+            )
+        except Exception:
+            pass
         if not result.success:
             return step, result, "fail"
         return step, result, None

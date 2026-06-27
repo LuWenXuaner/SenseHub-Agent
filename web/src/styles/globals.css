@@ -3343,3 +3343,54 @@ html[data-console-theme="ember"] {
   --mimo-accent: #fa541c;
 }
 
+.mimo-console-profile-surface {
+  background: var(--console-profile-bg, var(--background, #f7f7f7));
+}
+
+.dark .mimo-console-profile-surface {
+  background: var(--console-profile-bg, var(--background));
+}
+
+.dark .mimo-console-shell {
+  color: var(--text-primary);
+}
+
+.dark .mimo-console-main {
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.dark .mimo-engage-cosmetic-label {
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.dark .mimo-engage-panel {
+  background: color-mix(in srgb, var(--surface) 94%, white 6%);
+  border-color: color-mix(in srgb, var(--border) 85%, transparent);
+}
+
+.hub-chat-bubble-agent .chat-markdown,
+.mimo-studio-chat-bubble-assistant .chat-markdown {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.dark .hub-chat-bubble-agent {
+  background: color-mix(in srgb, var(--surface-elevated, var(--surface)) 88%, var(--primary) 4%);
+  border-color: color-mix(in srgb, var(--border) 70%, var(--primary) 12%);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.22);
+}
+
+.dark .hub-chat-bubble-user {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 22%, transparent) 0%,
+    color-mix(in srgb, var(--primary) 14%, transparent) 100%
+  );
+}
+
+.dark .mimo-console-announce {
+  background: color-mix(in srgb, var(--surface) 90%, var(--primary) 10%);
+  color: var(--text-secondary);
+}
+

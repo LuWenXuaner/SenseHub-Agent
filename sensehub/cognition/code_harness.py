@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Literal
 
 from sensehub.cognition.prompts import CODE_ASSIST_SYSTEM
@@ -17,17 +19,17 @@ from sensehub.cognition.studio_models import StudioModelRoute, resolve_studio_mo
 
 CodeHarnessMode = Literal["agent", "plan"]
 
-CODE_ANALYZER_SYSTEM = """你是灵枢 Code Harness 的「分析脑」。理解用户编程指令，输出 JSON（不要 markdown）：
+CODE_ANALYZER_SYSTEM = """你是灵枢 Code Harness 的「分析脑」。理解用户编程指令，结合项目文件列表与已附加上下文，输出 JSON（不要 markdown）：
 
 {
   "goal": "用户想完成什么",
-  "target_files": ["预计需要修改的相对路径"],
+  "target_files": ["与任务相关的相对路径，从项目文件列表中挑选"],
   "change_type": "fix|feature|refactor|explain|other",
   "risks": ["潜在风险或需用户确认的点"],
   "notes": "给代码生成脑的简短提示"
 }
 
-只分析，不写代码。"""
+只分析，不写代码。target_files 须从已知项目文件中选取与提示词最相关的路径。"""
 
 CODE_PLANNER_SYSTEM = """你是灵枢 Code Harness 的「规划脑」。根据用户指令与项目上下文，输出 JSON（不要 markdown）：
 
@@ -39,7 +41,85 @@ CODE_PLANNER_SYSTEM = """你是灵枢 Code Harness 的「规划脑」。根据�
   "assumptions": ["假设或需用户确认的点"]
 }
 
-只规划，不写完整代码。"""
+只规划，不写完整代码。规划结果将保存为项目内的 Markdown 文件（非代码文件）。"""
+
+
+def _slug_from_text(text: str, *, max_len: int = 32) -> str:
+    raw = re.sub(r"[^\w\u4e00-\u9fff]+", "-", (text or "").strip()).strip("-").lower()
+    if not raw:
+        return "task"
+    return raw[:max_len].strip("-") or "task"
+
+
+def _plan_markdown_path(user_text: str, project_files: list[str] | None) -> str:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    slug = _slug_from_text(user_text)
+    existing = set(project_files or [])
+    for candidate in (
+        f".sensehub/plans/{slug}-{stamp}.md",
+        f".sensehub/plans/plan-{stamp}.md",
+        f"docs/plans/{slug}-{stamp}.md",
+    ):
+        if candidate not in existing:
+            return candidate
+    return f".sensehub/plans/plan-{stamp}.md"
+
+
+def _format_plan_document(
+    user_text: str,
+    plan: dict[str, Any],
+    analysis: dict[str, Any],
+) -> str:
+    lines = [
+        "# 灵枢 Code Plan",
+        "",
+        f"> **用户指令**：{user_text.strip()}",
+        "",
+    ]
+    goal = str(analysis.get("goal") or "").strip()
+    if goal:
+        lines.extend(["## 目标", "", goal, ""])
+    summary = str(plan.get("summary") or "").strip()
+    if summary:
+        lines.extend(["## 方案", "", summary, ""])
+    steps = plan.get("steps")
+    if isinstance(steps, list) and steps:
+        lines.extend(["## 步骤", ""])
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            sid = step.get("id", "?")
+            action = step.get("action", "")
+            files = step.get("files") or []
+            detail = str(step.get("detail") or "").strip()
+            file_hint = f" — `{', '.join(str(f) for f in files)}`" if files else ""
+            lines.append(f"{sid}. {action}{file_hint}")
+            if detail:
+                lines.append(f"   {detail}")
+        lines.append("")
+    assumptions = plan.get("assumptions")
+    if isinstance(assumptions, list) and assumptions:
+        lines.extend(["## 假设与待确认", ""])
+        for a in assumptions:
+            lines.append(f"- {a}")
+        lines.append("")
+    risks = analysis.get("risks")
+    if isinstance(risks, list) and risks:
+        lines.extend(["## 风险提示", ""])
+        for r in risks:
+            lines.append(f"- {r}")
+        lines.append("")
+    notes = str(analysis.get("notes") or "").strip()
+    if notes:
+        lines.extend(["## 备注", "", notes, ""])
+    lines.extend(
+        [
+            "---",
+            "",
+            "*由灵枢 Plan 模式生成。确认方案后，请切换到 **Agent** 模式执行代码改动。*",
+        ]
+    )
+    return "\n".join(lines).strip() + "\n"
 
 
 @dataclass
@@ -186,17 +266,17 @@ async def run_code_harness(
     analysis: dict[str, Any] = {}
     plan: dict[str, Any] = {}
 
-    if effective_mode == "plan":
-        try:
-            analysis = await _chat_json_with_route(
-                router, None, "intent", CODE_ANALYZER_SYSTEM, analyze_input
-            )
-            passes.append(
-                {"role": "analyzer", "model": "role/intent", "summary": str(analysis.get("goal", ""))[:80]}
-            )
-        except Exception as exc:
-            passes.append({"role": "analyzer", "model": "role/intent", "summary": f"分析跳过: {exc}"})
+    try:
+        analysis = await _chat_json_with_route(
+            router, None, "intent", CODE_ANALYZER_SYSTEM, analyze_input
+        )
+        passes.append(
+            {"role": "analyzer", "model": "role/intent", "summary": str(analysis.get("goal", ""))[:80]}
+        )
+    except Exception as exc:
+        passes.append({"role": "analyzer", "model": "role/intent", "summary": f"分析跳过: {exc}"})
 
+    if effective_mode == "plan":
         plan_input = analyze_input
         if analysis:
             plan_input += f"\n\n【Code Harness 分析】\n{json.dumps(analysis, ensure_ascii=False)}"
@@ -220,9 +300,25 @@ async def run_code_harness(
         {
             "role": "mode",
             "model": model_label,
-            "summary": "Plan 先规划后改码" if effective_mode == "plan" else "Agent 直接改码",
+            "summary": "Plan 仅输出规划文档" if effective_mode == "plan" else "Agent 直接改码",
         }
     )
+
+    if effective_mode == "plan":
+        plan_block = _format_plan_reply(plan, analysis)
+        plan_path = _plan_markdown_path(user_text, project_files)
+        plan_doc = _format_plan_document(user_text, plan, analysis)
+        reply = plan_block or "已完成规划，请确认后切换到 Agent 模式执行改动。"
+        reply += f"\n\n---\n\n**规划文档已写入**：`{plan_path}`"
+        if analysis.get("risks"):
+            risks = analysis.get("risks")
+            if isinstance(risks, list) and risks:
+                reply += "\n\n**风险提示**：\n" + "\n".join(f"- {r}" for r in risks)
+        return CodeHarnessResult(
+            reply=reply,
+            edits=[{"path": plan_path, "content": plan_doc}],
+            passes=passes,
+        )
 
     coder_role = "coder"
     result = await _chat_json_with_route(router, route, coder_role, CODE_ASSIST_SYSTEM, gen_input)
@@ -230,13 +326,6 @@ async def run_code_harness(
 
     reply = str(result.get("reply") or "").strip()
     edits = _parse_edits(result)
-
-    if effective_mode == "plan" and plan:
-        plan_block = _format_plan_reply(plan, analysis)
-        if reply:
-            reply = f"{plan_block}\n\n---\n\n{reply}"
-        else:
-            reply = plan_block
 
     if not reply:
         reply = "已完成分析。" if edits else "未生成文件修改。"

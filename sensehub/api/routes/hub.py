@@ -306,6 +306,13 @@ async def virtual_session_start(_: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/hub/tool-insights")
+async def hub_tool_insights(_: str = Depends(get_current_user)):
+    from sensehub.db import tool_stats as tool_stats_repo
+
+    return tool_stats_repo.tool_insights()
+
+
 @router.post("/virtual-screen/session/stop")
 async def virtual_session_stop(_: str = Depends(get_current_user)):
     return VirtualScreenSession.stop()

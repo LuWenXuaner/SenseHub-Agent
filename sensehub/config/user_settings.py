@@ -294,6 +294,47 @@ def get_default_save_path() -> str:
     return str(_load_raw().get("default_save_path") or "").strip()
 
 
+def builtin_default_save_path() -> str:
+    """项目根目录下的 result 文件夹（用户未自定义时的默认落盘位置）."""
+    from sensehub.settings import get_settings
+
+    root = Path(get_settings().sensehub_root)
+    try:
+        p = (root / "result").resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return str(p)
+    except OSError:
+        return ""
+
+
+def ensure_default_save_path_ready() -> str:
+    """启动时确保默认交付目录存在、已授权；未自定义时写入 result 并持久化."""
+    from sensehub.security.sandbox import add_runtime_grant
+
+    custom = get_default_save_path()
+    if custom:
+        try:
+            add_runtime_grant(custom)
+        except OSError:
+            pass
+        return custom
+    builtin = builtin_default_save_path()
+    if not builtin:
+        return ""
+    try:
+        add_runtime_grant(builtin)
+    except OSError:
+        pass
+    return set_default_save_path(builtin)
+
+
+def get_effective_default_save_path() -> str:
+    custom = get_default_save_path()
+    if custom:
+        return custom
+    return builtin_default_save_path()
+
+
 def set_default_save_path(path_str: str) -> str:
     """设置 Console 默认保存路径，并加入沙箱可写授权."""
     from sensehub.security.sandbox import add_runtime_grant
@@ -315,9 +356,11 @@ def set_default_save_path(path_str: str) -> str:
 def get_console_settings_public() -> dict[str, str]:
     from sensehub.security.sandbox import workspace_dir
 
-    save = get_default_save_path()
+    save = get_effective_default_save_path()
+    user_set = bool(get_default_save_path())
     return {
         "default_save_path": save,
+        "default_save_path_user_set": str(user_set).lower(),
         "workspace": str(workspace_dir()),
     }
 

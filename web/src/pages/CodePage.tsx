@@ -31,7 +31,7 @@ import {
   listProjectFiles,
   loadLastActivePath,
   loadProjectHandle,
-  matchContextFiles,
+  collectSmartContextFiles,
   readProjectText,
   saveLastActivePath,
   saveProjectHandle,
@@ -326,11 +326,16 @@ export function CodePage() {
     if (activePath && activeHandle) {
       contextFiles.push({ path: activePath, content });
     }
-    for (const entry of matchContextFiles(text, files, activePath)) {
-      try {
-        contextFiles.push({ path: entry.path, content: await readProjectText(entry.handle) });
-      } catch {
-        /* skip */
+    const smart = await collectSmartContextFiles(
+      text,
+      files,
+      activePath,
+      (handle) => readProjectText(handle),
+      mode
+    );
+    for (const item of smart) {
+      if (!contextFiles.some((c) => c.path === item.path)) {
+        contextFiles.push(item);
       }
     }
 
@@ -347,7 +352,23 @@ export function CodePage() {
       });
       const reply = (res.reply || t.common.noData).trim();
       persistMessages([...nextMsgs, { role: "assistant" as const, content: reply }], dirName);
-      if (res.edits?.length) await applyEdits(res.edits);
+      if (res.edits?.length) {
+        const toApply =
+          mode === "plan"
+            ? res.edits.filter((e) => e.path.toLowerCase().endsWith(".md"))
+            : res.edits;
+        if (toApply.length) {
+          await applyEdits(toApply);
+          if (mode === "plan" && dirHandleRef.current && toApply[0]?.path) {
+            try {
+              const handle = await getProjectFileHandle(dirHandleRef.current, toApply[0].path, false);
+              await openFile(toApply[0].path, handle);
+            } catch {
+              /* tree refresh may lag */
+            }
+          }
+        }
+      }
     } catch (err) {
       const msg = formatUserFacingError(err instanceof Error ? err.message : t.common.noData);
       persistMessages([...nextMsgs, { role: "assistant" as const, content: msg }], dirName);
@@ -378,7 +399,7 @@ export function CodePage() {
 
   return (
     <div className="code-workspace flex h-full min-h-0 flex-col bg-mimo-warm">
-      <div className="flex shrink-0 items-center gap-2 border-b border-mimo-border bg-white px-3 py-2">
+      <div className="flex shrink-0 items-center gap-2 border-b border-mimo-border bg-white px-3 py-2 dark:bg-surface">
         <button
           type="button"
           className="mimo-btn-cta mimo-btn-sm inline-flex items-center gap-1.5"

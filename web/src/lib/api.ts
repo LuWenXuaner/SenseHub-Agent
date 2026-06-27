@@ -208,6 +208,11 @@ export const api = {
       body: JSON.stringify({ text, history: history ?? [], session_id: sessionId ?? "", channel: "hub" }),
       signal,
     }),
+  hubToolInsights: () =>
+    request<{
+      top_tools: { tool: string; calls: number; success_rate: number; avg_ms: number }[];
+      suggested_shortcuts: { tool: string; label: string; command: string }[];
+    }>("/api/hub/tool-insights"),
   studioChat: (
     text: string,
     signal?: AbortSignal,

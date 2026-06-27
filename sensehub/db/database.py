@@ -205,6 +205,31 @@ CREATE TABLE IF NOT EXISTS llm_token_usage (
 );
 
 CREATE INDEX IF NOT EXISTS idx_llm_token_usage_user_day ON llm_token_usage(user_id, day);
+
+CREATE TABLE IF NOT EXISTS plan_templates (
+    template_id TEXT PRIMARY KEY,
+    intent_fingerprint TEXT NOT NULL,
+    tool_signature TEXT NOT NULL DEFAULT '',
+    intent_snapshot TEXT DEFAULT '{}',
+    plan_json TEXT NOT NULL DEFAULT '[]',
+    summary TEXT DEFAULT '',
+    success_count INTEGER DEFAULT 0,
+    fail_count INTEGER DEFAULT 0,
+    last_used_at TEXT DEFAULT (datetime('now')),
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_templates_fp ON plan_templates(intent_fingerprint);
+CREATE INDEX IF NOT EXISTS idx_plan_templates_sig ON plan_templates(tool_signature);
+
+CREATE TABLE IF NOT EXISTS tool_stats (
+    tool TEXT NOT NULL,
+    day TEXT NOT NULL,
+    calls INTEGER DEFAULT 0,
+    success INTEGER DEFAULT 0,
+    total_ms INTEGER DEFAULT 0,
+    PRIMARY KEY (tool, day)
+);
 """
 
 

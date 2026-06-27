@@ -14,6 +14,7 @@ from sensehub.api.middleware_lan import LanAccessMiddleware
 from sensehub.api.routes import admin, audit, auth, gamification, health, hub, license, models, perception, rules, security, sessions, tasks, tts, tunnel, user_settings, virtual_screen, voice, wallet
 from sensehub.api.ws import router as ws_router
 from sensehub.gateway.ws_agent import router as ws_agent_router
+from sensehub.config.user_settings import ensure_default_save_path_ready
 from sensehub.db.database import init_db
 from sensehub.execution.kill_switch import reset as reset_kill_switch
 from sensehub.feedback.hooks import setup_feedback_hooks
@@ -24,6 +25,7 @@ from sensehub.settings import get_settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    ensure_default_save_path_ready()
     init_perception()
     setup_feedback_hooks()
     reset_kill_switch()

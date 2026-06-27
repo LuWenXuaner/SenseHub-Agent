@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from sensehub.cognition.brain import BrainPipelineError, format_brain_summary
+from sensehub.cognition.plan_cache import save_success_plan
 from sensehub.db import tasks as task_repo
 from sensehub.licensing.tier import check_text_quota, increment_text_usage
 from sensehub.models.schemas import ExecutionPlan, TaskResponse
@@ -97,6 +98,8 @@ async def run_task(task_id: str, intent_text: str, *, plan: ExecutionPlan | None
                 current_step=len(plan.steps),
                 step_results=step_results,
             )
+            if status == "done" and plan.steps:
+                save_success_plan(intent_text, plan)
             result = task_repo.get_task(task_id)
             assert result
             _notify(result)
@@ -145,6 +148,7 @@ async def run_task(task_id: str, intent_text: str, *, plan: ExecutionPlan | None
         result = task_repo.get_task(task_id)
         assert result
         if result.status == "done" and plan.steps:
+            save_success_plan(intent_text, plan)
             from sensehub.cognition.dispatch import synthesize_task_reply
 
             try:

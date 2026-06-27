@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from sensehub.gateway.events import subscribe, unsubscribe
@@ -60,6 +62,12 @@ async def ws_agent(ws: WebSocket, token: str = "", session_id: str = ""):
     await agent_manager.connect(ws, session_id)
     try:
         while True:
-            await ws.receive_text()
+            raw = await ws.receive_text()
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if str(msg.get("type") or "") == "ping":
+                await ws.send_json({"type": "pong"})
     except WebSocketDisconnect:
         agent_manager.disconnect(ws, session_id)

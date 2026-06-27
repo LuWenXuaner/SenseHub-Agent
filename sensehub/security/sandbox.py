@@ -43,11 +43,11 @@ def workspace_dir() -> Path:
 
 
 def default_save_dir() -> Path:
-    """用户配置的默认保存目录；未配置时等同工作区."""
+    """用户配置的默认保存目录；未配置时回退到项目 result 或工作区."""
     try:
-        from sensehub.config.user_settings import get_default_save_path
+        from sensehub.config.user_settings import get_effective_default_save_path
 
-        custom = get_default_save_path()
+        custom = get_effective_default_save_path()
     except Exception:
         custom = ""
     if custom:
@@ -156,6 +156,21 @@ def _in_roots(path: Path, roots: list[Path]) -> Path | None:
     return None
 
 
+def _redirect_workspace_write_to_save_dir(path: Path) -> Path:
+    """模型若误将交付物写到沙箱工作区，自动改到默认交付目录."""
+    ws = workspace_dir()
+    save = default_save_dir()
+    if str(save).lower() == str(ws).lower():
+        return path
+    try:
+        rel = path.resolve().relative_to(ws.resolve())
+        redirected = (save / rel).resolve()
+        redirected.parent.mkdir(parents=True, exist_ok=True)
+        return redirected
+    except ValueError:
+        return path
+
+
 def resolve_path(path_str: str) -> Path:
     if not path_str or not str(path_str).strip():
         raise ValueError("path 不能为空")
@@ -170,6 +185,8 @@ def resolve_path(path_str: str) -> Path:
 def check_filesystem(path_str: str, operation: Operation = "read") -> SandboxDecision:
     try:
         path = resolve_path(path_str)
+        if operation == "write":
+            path = _redirect_workspace_write_to_save_dir(path)
     except ValueError as exc:
         return SandboxDecision(
             allowed=False,
@@ -277,12 +294,10 @@ def describe_for_planner() -> str:
     writable = writable_roots()
     lines = [
         "\n### 沙箱与权限（通用规则，禁止为单个案例写死逻辑）",
-        f"- 默认工作区（可自由读写）：{ws}",
+        f"- **默认交付目录**（write_file / generate_document 相对路径落盘于此）：{save_dir}",
+        f"- 沙箱工作区（仅内部临时缓存，**勿**将用户交付物保存到此）：{ws}",
+        "- 交付物请用相对文件名（如 report.docx），勿写工作区绝对路径",
     ]
-    if str(save_dir) != str(ws):
-        lines.append(f"- 用户默认保存路径（相对路径优先落盘于此）：{save_dir}")
-    else:
-        lines.append("- 相对路径默认解析到工作区；用户可在 Console 状态栏配置「默认保存路径」")
     lines += [
         "- 用户在对话中指定了绝对路径或其他目录时，从其指定路径保存",
         "- 工作区外写入：步骤须标记 risk_level=L2 且 requires_confirm=true，等用户点「确认」",
@@ -294,7 +309,7 @@ def describe_for_planner() -> str:
     ]
     for r in writable:
         lines.append(f"  - {r}")
-    lines.append("- 若路径未授权，应规划到工作区，或拆成「先请求用户授权再执行」的步骤")
+    lines.append("- 若路径未授权，应规划到默认交付目录，或拆成「先请求用户授权再执行」的步骤")
     return "\n".join(lines)
 
 

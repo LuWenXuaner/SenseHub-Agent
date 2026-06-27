@@ -1,4 +1,12 @@
 import { api, DetectionBox, getToken } from "@/lib/api";
+import { isLocalSenseHubHost } from "@/lib/isLocalHost";
+import {
+  ensureClientCameraStream,
+  forceReleaseClientCameraStream,
+  releaseClientCameraStream,
+  subscribeClientCameraFrames,
+  subscribeClientCameraStatus,
+} from "@/lib/clientCameraStream";
 
 export type CameraFramePayload = {
   image: string;
@@ -159,6 +167,9 @@ async function connectInternal() {
 }
 
 export async function ensureCameraStream() {
+  if (!isLocalSenseHubHost()) {
+    return ensureClientCameraStream();
+  }
   if (ws?.readyState === WebSocket.OPEN) {
     refCount += 1;
     emitStatus();
@@ -230,6 +241,9 @@ async function teardownCameraSocket() {
 }
 
 export async function releaseCameraStream() {
+  if (!isLocalSenseHubHost()) {
+    return releaseClientCameraStream();
+  }
   refCount = Math.max(0, refCount - 1);
   if (refCount > 0) {
     emitStatus();
@@ -241,16 +255,25 @@ export async function releaseCameraStream() {
 
 /** 用户主动关摄像头：无视引用计数，强制断开 */
 export async function forceReleaseCameraStream() {
+  if (!isLocalSenseHubHost()) {
+    return forceReleaseClientCameraStream();
+  }
   refCount = 0;
   await teardownCameraSocket();
 }
 
 export function subscribeCameraFrames(listener: FrameListener) {
+  if (!isLocalSenseHubHost()) {
+    return subscribeClientCameraFrames(listener);
+  }
   frameListeners.add(listener);
   return () => frameListeners.delete(listener);
 }
 
 export function subscribeCameraStatus(listener: StatusListener) {
+  if (!isLocalSenseHubHost()) {
+    return subscribeClientCameraStatus(listener);
+  }
   statusListeners.add(listener);
   listener({ streaming, loading, error });
   return () => statusListeners.delete(listener);

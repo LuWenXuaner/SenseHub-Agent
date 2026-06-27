@@ -8,7 +8,7 @@ from typing import Any
 from sensehub.cognition.harness import apply_sandbox_confirm_gates
 from sensehub.cognition.safety import SafetyReviewer
 from sensehub.execution.tools.desktop import is_login_title
-from sensehub.models.schemas import ExecutionPlan, PlanStep, StepResult
+from sensehub.models.schemas import ExecutionPlan, PlanStep, SafetyScore, StepResult
 from sensehub.runtime.verifier import ui_verified
 
 _UI_ACTION_TOOLS = frozenset(
@@ -135,10 +135,15 @@ def review_plan_safety(plan: ExecutionPlan) -> tuple[bool, str]:
     return safe, reason
 
 
+def score_plan_safety(plan: ExecutionPlan) -> SafetyScore:
+    return SafetyReviewer().score(plan)
+
+
 __all__ = [
     "apply_sandbox_confirm_gates",
     "gate_login_screen",
     "gate_ui_action",
     "needs_im_search_flow",
     "review_plan_safety",
+    "score_plan_safety",
 ]

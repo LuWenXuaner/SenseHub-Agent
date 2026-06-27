@@ -9,8 +9,10 @@ from langgraph.graph import END, StateGraph
 from langgraph.types import Command, interrupt
 
 from sensehub.db import tasks as task_repo
+from sensehub.db import tool_stats as tool_stats_repo
+from sensehub.cognition.plan_cache import save_success_plan
 from sensehub.execution.tools.registry import execute_step
-from sensehub.models.schemas import PlanStep, StepResult
+from sensehub.models.schemas import ExecutionPlan, PlanStep, StepResult
 from sensehub.orchestration.notify import notify
 from sensehub.security.audit import log_audit
 
@@ -56,6 +58,11 @@ def _execute_steps(state: GraphState) -> GraphState:
         task_repo.update_task(task_id, current_step=index + 1)
         result = execute_step(step)
         results.append(result)
+        tool_stats_repo.record_tool_call(
+            tool=step.tool,
+            success=result.success,
+            duration_ms=result.duration_ms,
+        )
         task_repo.update_task(task_id, step_results=results)
         partial = task_repo.get_task(task_id)
         if partial:
@@ -89,6 +96,8 @@ def _execute_steps(state: GraphState) -> GraphState:
         trace_id=trace_id,
     )
     final = task_repo.get_task(task_id)
+    if final and final.plan_steps:
+        save_success_plan(intent_text, ExecutionPlan(plan_id=task_id, steps=final.plan_steps, summary=final.summary))
     if final:
         notify(final)
     return {

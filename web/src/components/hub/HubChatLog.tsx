@@ -1,5 +1,6 @@
 import { AlertCircle, Bot, Loader2, UserRound } from "lucide-react";
 import { ChatMessageContent } from "@/components/chat/ChatMessageContent";
+import { MessageCopyButton } from "@/components/chat/MessageCopyButton";
 import { ConfirmPanel } from "@/components/tasks/ConfirmPanel";
 import type { Task } from "@/lib/api";
 import type { ThinkingStep } from "@/lib/thinkingTrace";
@@ -117,6 +118,11 @@ export function HubChatLog({ log, stopping, labels, onPatch, onApplyTask, onPoll
               isError ? "hub-chat-bubble-error" : ""
             }`}
           >
+            {log.text && !isThinking && (
+              <div className="mb-1 flex justify-end">
+                <MessageCopyButton text={log.text} />
+              </div>
+            )}
             <ChatMessageContent text={log.text} variant="studio" />
           </div>
         ) : null}

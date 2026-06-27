@@ -1,6 +1,7 @@
 import { Link, Outlet } from "react-router-dom";
 import { PanelLeft, PanelLeftClose, Plus, Trash2, User } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { applyStoredConsoleProfile, applyStoredConsoleTheme } from "@/hooks/useGamification";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
 import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
@@ -121,13 +122,18 @@ function ClawSidebar() {
 }
 
 export function MimoClawShell() {
+  useEffect(() => {
+    applyStoredConsoleTheme();
+    applyStoredConsoleProfile();
+  }, []);
+
   return (
     <ClawSessionProvider>
-      <div className="mimo-product-app flex h-screen">
+      <div className="mimo-product-app mimo-console-shell flex h-screen dark:bg-background">
         <ClawSidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <ClawTopBar />
-          <main className="min-h-0 flex-1 overflow-hidden bg-mimo-warm">
+          <main className="mimo-console-profile-surface min-h-0 flex-1 overflow-hidden bg-mimo-warm dark:bg-background">
             <Outlet />
           </main>
         </div>

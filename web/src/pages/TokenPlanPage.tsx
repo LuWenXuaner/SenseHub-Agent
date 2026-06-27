@@ -16,6 +16,11 @@ import {
   type TokenPlanTier,
 } from "@/lib/tokenPlanCatalog";
 import { TOKEN_PLAN_CODING_TOOLS } from "@/lib/siteContent";
+import {
+  RedeemConfirmDialog,
+  RedeemSuccessDialog,
+  type RedeemConfirmItem,
+} from "@/components/mimo/RedeemConfirmDialog";
 import { PartnerIcon } from "@/components/marketing/PartnerIcon";
 import "@/styles/token-plan-page.css";
 
@@ -33,6 +38,15 @@ export function TokenPlanPage() {
   const [err, setErr] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [pendingPlan, setPendingPlan] = useState<{
+    plan: TokenPlanSpec;
+    planKey: string;
+    cost: number;
+    label: string;
+    state: ReturnType<typeof resolveSubscribeState>;
+  } | null>(null);
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
 
   const userTierRank = summary?.tier_rank ?? 0;
   const subscriptionActive = summary?.subscription_active ?? false;
@@ -97,7 +111,7 @@ export function TokenPlanPage() {
     return tp.subscribeNow;
   };
 
-  const onSubscribe = async (plan: TokenPlanSpec) => {
+  const openSubscribe = (plan: TokenPlanSpec) => {
     setErr("");
     setMsg("");
     if (!token) {
@@ -110,14 +124,31 @@ export function TokenPlanPage() {
       return;
     }
     const planKey = planSubscribeKey(plan.id, billing);
-    setLoadingId(plan.id);
+    const cost = billing === "monthly" ? plan.monthlyCost : plan.yearlyCost;
+    const tierName = plan.id.charAt(0).toUpperCase() + plan.id.slice(1);
+    const period = billing === "monthly" ? tp.billingMonthly : tp.billingYearly;
+    setPendingPlan({
+      plan,
+      planKey,
+      cost,
+      label: `${tierName} · ${period}`,
+      state,
+    });
+  };
+
+  const confirmSubscribe = async () => {
+    if (!pendingPlan) return;
+    setLoadingId(pendingPlan.plan.id);
     try {
-      const res = await subscribe(planKey);
+      const res = await subscribe(pendingPlan.planKey);
       await refreshWallet();
       await refreshLicense();
-      setMsg(fmt(tp.success, { label: res.label, balance: res.balance.toLocaleString() }));
+      setPendingPlan(null);
+      setSuccessMsg(fmt(tp.success, { label: res.label, balance: res.balance.toLocaleString() }));
+      setSuccessOpen(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : tp.insufficient);
+      setPendingPlan(null);
     } finally {
       setLoadingId(null);
     }
@@ -236,7 +267,7 @@ export function TokenPlanPage() {
                     type="button"
                     className={`mimo-tp-subscribe ${state === "blocked" ? "mimo-tp-subscribe-disabled" : ""}`}
                     disabled={disabled}
-                    onClick={() => void onSubscribe(plan)}
+                    onClick={() => openSubscribe(plan)}
                   >
                     {loadingId === plan.id ? "…" : btnLabel(state)}
                   </button>
@@ -329,6 +360,30 @@ export function TokenPlanPage() {
           )}
         </div>
       </section>
+
+      <RedeemConfirmDialog
+        open={Boolean(pendingPlan)}
+        item={
+          pendingPlan
+            ? {
+                id: pendingPlan.planKey,
+                label: pendingPlan.label,
+                cost: pendingPlan.cost,
+                desc:
+                  pendingPlan.state === "renew"
+                    ? tp.btnRenew
+                    : pendingPlan.state === "upgrade"
+                      ? tp.btnUpgrade
+                      : tp.subscribeNow,
+              }
+            : null
+        }
+        balance={balance}
+        loading={loadingId === pendingPlan?.plan.id}
+        onClose={() => setPendingPlan(null)}
+        onConfirm={() => void confirmSubscribe()}
+      />
+      <RedeemSuccessDialog open={successOpen} message={successMsg} onClose={() => setSuccessOpen(false)} />
     </div>
   );
 }

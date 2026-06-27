@@ -24,6 +24,7 @@ export function ConsoleApiKeysPage() {
   const [draft, setDraft] = useState<Record<string, { base_url: string; api_key: string }>>({});
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [routingKey, setRoutingKey] = useState(0);
 
   const load = () =>
     api.getApiConfig().then((c) => {
@@ -52,6 +53,7 @@ export function ConsoleApiKeysPage() {
       await api.saveApiConfig({ providers: payload });
       setMsg(k.saved);
       await load();
+      setRoutingKey((n) => n + 1);
     } catch (e) {
       setErr(e instanceof Error ? e.message : k.saveFailed);
     }
@@ -153,7 +155,7 @@ export function ConsoleApiKeysPage() {
       </div>
 
       <div className="mt-10">
-        <ConsoleBrainRouting variant="full" />
+        <ConsoleBrainRouting variant="full" reloadKey={routingKey} />
       </div>
     </ConsolePageFrame>
   );

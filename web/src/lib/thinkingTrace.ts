@@ -273,10 +273,26 @@ export function buildThinkingSteps(
       const summary = String(agent.summary || "").trim();
       const planSteps = Array.isArray(agent.steps) ? (agent.steps as PlanStep[]) : [];
       const chain = planChain(planSteps);
-      push("方案规划", chain || summary || `共 ${planSteps.length} 个步骤`);
+      const src = String(agent.source || "");
+      const cacheNote = src === "cache" ? "（命中规划缓存）" : "";
+      push("方案规划", (chain || summary || `共 ${planSteps.length} 个步骤`) + cacheNote);
     } else if (role === "safety") {
       const passed = Boolean(agent.passed);
-      push("安全审查", passed ? "操作风险可接受，允许执行" : String(agent.reason || "已拦截"), passed ? "done" : "error");
+      const scores = (agent.scores || {}) as Record<string, unknown>;
+      const op = scores.operation_risk;
+      const comp = scores.compliance;
+      const res = scores.resource_cost;
+      const overall = scores.overall;
+      const scoreLine =
+        op != null && comp != null && res != null
+          ? `风险 ${op} · 合规 ${comp} · 资源 ${res}${overall != null ? ` · 综合 ${overall}` : ""}`
+          : "";
+      const detail = passed
+        ? scoreLine
+          ? `${scoreLine}，允许执行`
+          : "操作风险可接受，允许执行"
+        : [scoreLine, String(agent.reason || "已拦截")].filter(Boolean).join("；");
+      push("安全审查", detail, passed ? "done" : "error");
     } else if (role === "skill") {
       push("加载规程", String(agent.name || agent.id || "Skill"));
     } else if (role === "atomic_plan") {

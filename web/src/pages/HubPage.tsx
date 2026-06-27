@@ -10,10 +10,10 @@ import {
   mergeThinkingSteps,
   resolveDisplayText,
   taskFromResponse,
-  applyAgentStreamEvent,
   streamLogPatchFromAgentEvent,
   renumberThinkingSteps,
 } from "@/lib/thinkingTrace";
+import { createAgentWs, type AgentWsStatus } from "@/lib/agentWs";
 import { clearJpegCanvas, drawJpegToCanvas } from "@/lib/jpegPreview";
 import { drawPerceptionOverlay } from "@/lib/perceptionOverlay";
 import { useAuth } from "@/context/AuthContext";
@@ -29,6 +29,7 @@ const IM_DESKTOP_TOOLS = new Set(["wechat_send_message"]);
 import { ConsoleBrainRouting } from "@/components/console/ConsoleBrainRouting";
 import { ConsoleSavePathPicker } from "@/components/hub/ConsoleSavePathPicker";
 import { HubChatLog } from "@/components/hub/HubChatLog";
+import { ClawOnboarding, isClawOnboardingDone } from "@/components/hub/ClawOnboarding";
 import { HubVirtualScreenMenu } from "@/components/hub/HubVirtualScreenMenu";
 import { HubVirtualScreenCalibModal } from "@/components/hub/HubVirtualScreenCalibModal";
 import {
@@ -136,12 +137,15 @@ export function HubPage() {
   const abortRef = useRef<AbortController | null>(null);
   const pollAbortRef = useRef(false);
   const activeRunRef = useRef<{ logId: string; taskId?: string; sessionId: string } | null>(null);
-  const agentWsRef = useRef<WebSocket | null>(null);
+  const agentWsClientRef = useRef<ReturnType<typeof createAgentWs> | null>(null);
   const stoppedRunsRef = useRef<Set<string>>(new Set());
   const userTouchedSessionRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
   const busySessionIdRef = useRef<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
+  const [wsStatus, setWsStatus] = useState<AgentWsStatus>("connecting");
+  const [shortcuts, setShortcuts] = useState<{ tool: string; label: string; command: string }[]>([]);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const virtualScreenEnabled = Boolean(license?.features?.virtual_screen);
   const ttsEnabled = Boolean(license?.features?.tts_feedback);
   const isCurrentSessionBusy = busySessionId === sessionId;
@@ -297,44 +301,19 @@ export function HubPage() {
   );
 
   useEffect(() => {
+    if (!sessionsReady || isClawOnboardingDone()) return;
+    if (logs.length === 0) setOnboardingOpen(true);
+  }, [sessionsReady, logs.length]);
+
+  useEffect(() => {
     const token = getToken();
     if (!token) return;
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(
-      `${proto}://${window.location.host}/ws/agent?token=${encodeURIComponent(token)}`
-    );
-    agentWsRef.current = ws;
-    ws.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data) as Record<string, unknown>;
-        const active = activeRunRef.current;
-        if (!active?.logId) return;
-        const eventSid = String(data.session_id || "");
-        if (eventSid && active.sessionId && eventSid !== active.sessionId) {
-          activeRunRef.current = { ...active, sessionId: eventSid };
-        }
-        const evType = String(data.type || "");
-        const evTool = String(data.tool || "");
-        if (evType === "tool_start" && IM_DESKTOP_TOOLS.has(evTool)) {
-          releaseWebFocus();
-        }
-        patchActiveRunLog((log) => {
-          const stream = streamLogPatchFromAgentEvent(data, log);
-          if (stream.status === "done") {
-            if (busySessionIdRef.current) setBusySession(null);
-            activeRunRef.current = null;
-          }
-          return stream;
-        });
-      } catch {
-        // ignore
-      }
-    };
-    return () => {
-      agentWsRef.current = null;
-      ws.close();
-    };
-  }, [patchActiveRunLog]);
+    void api.hubToolInsights().then((res) => {
+      setShortcuts(res.suggested_shortcuts || []);
+    }).catch(() => {
+      /* ignore */
+    });
+  }, [user]);
 
   const applyTaskToLog = useCallback((task: Task, logId?: string) => {
     if (stoppedRunsRef.current.has(task.task_id)) return;
@@ -396,6 +375,63 @@ export function HubPage() {
     },
     [applyTaskToLog, setBusySession]
   );
+
+  const restoreActiveRunFromServer = useCallback(() => {
+    const active = activeRunRef.current;
+    if (!active?.taskId) return;
+    void api
+      .getTask(active.taskId)
+      .then((task) => {
+        if (stoppedRunsRef.current.has(active.taskId!) || stoppedRunsRef.current.has(active.logId)) return;
+        patchActiveRunLog((log) => {
+          const patch = logPatchFromTask(task, log);
+          return { ...log, ...patch };
+        });
+        if (!isTerminalTask(task) && task.status !== "wait_confirm") {
+          void pollTaskUntilSettled(active.taskId!, active.logId, active.sessionId);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  }, [patchActiveRunLog, pollTaskUntilSettled]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    const client = createAgentWs({
+      token,
+      sessionId,
+      onStatus: setWsStatus,
+      onReconnected: restoreActiveRunFromServer,
+      onEvent: (data) => {
+        const active = activeRunRef.current;
+        if (!active?.logId) return;
+        const eventSid = String(data.session_id || "");
+        if (eventSid && active.sessionId && eventSid !== active.sessionId) {
+          activeRunRef.current = { ...active, sessionId: eventSid };
+        }
+        const evType = String(data.type || "");
+        const evTool = String(data.tool || "");
+        if (evType === "tool_start" && IM_DESKTOP_TOOLS.has(evTool)) {
+          releaseWebFocus();
+        }
+        patchActiveRunLog((log) => {
+          const stream = streamLogPatchFromAgentEvent(data, log);
+          if (stream.status === "done") {
+            if (busySessionIdRef.current) setBusySession(null);
+            activeRunRef.current = null;
+          }
+          return stream;
+        });
+      },
+    });
+    agentWsClientRef.current = client;
+    return () => {
+      agentWsClientRef.current = null;
+      client.close();
+    };
+  }, [patchActiveRunLog, restoreActiveRunFromServer, sessionId, setBusySession]);
 
   const stopActiveRun = useCallback(() => {
     pollAbortRef.current = true;
@@ -899,6 +935,14 @@ export function HubPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden bg-mimo-surface p-3 md:p-4">
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-surface px-3 py-2 text-xs">
+        <StatusPill active={wsStatus === "connected"}>
+          <Waves size={12} aria-hidden />
+          {wsStatus === "connected"
+            ? c.wsConnected
+            : wsStatus === "reconnecting" || wsStatus === "connecting"
+              ? c.wsReconnecting
+              : c.wsOffline}
+        </StatusPill>
         <StatusPill active={streaming || camLoading}>
           <Monitor size={12} aria-hidden />
           {c.vision}{streaming ? c.visionOn : c.visionOff}
@@ -954,7 +998,7 @@ export function HubPage() {
         )}
 
         <section className={`card flex min-h-0 flex-col overflow-hidden p-3 ${showCamera ? "" : "min-h-0 flex-1"}`}>
-          <div ref={logsScrollRef} className="min-h-0 flex-1 overflow-y-auto text-sm">
+          <div ref={logsScrollRef} id="claw-onboard-chat" className="min-h-0 flex-1 overflow-y-auto text-sm">
             <div className="hub-chat-area flex min-h-full flex-col justify-end">
               {logs.length === 0 && (
                 <p className="py-8 text-center text-xs text-text-secondary">{c.emptyHint}</p>
@@ -982,8 +1026,26 @@ export function HubPage() {
             </div>
           </div>
 
+          {shortcuts.length > 0 && (
+            <div className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5 border-t border-border pt-2">
+              <span className="text-[10px] uppercase tracking-wide text-text-secondary">{c.shortcutHint}</span>
+              {shortcuts.map((s) => (
+                <button
+                  key={s.tool}
+                  type="button"
+                  className="rounded-full border border-border bg-surface px-2.5 py-0.5 text-xs text-text-secondary hover:border-primary/40 hover:text-text-primary"
+                  onClick={() => setText(s.command)}
+                  disabled={isCurrentSessionBusy}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="mt-3 flex shrink-0 gap-2 border-t border-border pt-3">
             <textarea
+              id="claw-onboard-input"
               ref={inputRef}
               className="input min-h-[2.5rem] min-w-0 flex-1 resize-none py-2 leading-relaxed"
               placeholder="输入指令或问题（Enter 发送，Shift+Enter 换行）"
@@ -1007,6 +1069,7 @@ export function HubPage() {
               </button>
             )}
             <button
+              id="claw-onboard-send"
               type="button"
               className={isCurrentSessionBusy ? "btn-danger shrink-0" : "btn-primary shrink-0"}
               onClick={() => (isCurrentSessionBusy ? stopActiveRun() : void submit(false))}
@@ -1025,6 +1088,11 @@ export function HubPage() {
         onStartCamera={() => {
           if (!streaming) void startCam();
         }}
+      />
+      <ClawOnboarding
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+        onFillSample={(sample) => setText(sample)}
       />
     </div>
   );

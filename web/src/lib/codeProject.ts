@@ -7,6 +7,24 @@ const STORE = "handles";
 const MAX_FILES = 500;
 const MAX_CONTEXT_BYTES = 48_000;
 
+const SKIP_DIR_NAMES = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "__pycache__",
+  ".venv",
+  "venv",
+  ".next",
+  "coverage",
+  ".turbo",
+]);
+
+const TEXT_FILE_RE =
+  /\.(tsx?|jsx?|mjs|cjs|vue|svelte|py|go|rs|java|kt|swift|rb|php|cs|cpp|c|h|hpp|sql|json|ya?ml|toml|md|txt|css|scss|less|html|sh|ps1|env|ini|cfg|conf|xml|svg|graphql|proto)$/i;
+
+export type CodeWorkflowMode = "agent" | "plan";
+
 function projectKey(scope: string): string {
   return `sensehub_code_project::${scope}`;
 }
@@ -129,6 +147,7 @@ export async function listProjectFiles(dir: FileSystemDirectoryHandle, prefix = 
     if (entry.kind === "file") {
       out.push({ path, handle: entry as FileSystemFileHandle });
     } else if (entry.kind === "directory" && out.length < MAX_FILES) {
+      if (SKIP_DIR_NAMES.has(name)) continue;
       out.push(...(await listProjectFiles(entry as FileSystemDirectoryHandle, path)));
     }
     if (out.length >= MAX_FILES) break;
@@ -232,4 +251,80 @@ export function matchContextFiles(text: string, files: CodeFileEntry[], activePa
       return lower.includes(f.path.toLowerCase()) || (base.length > 2 && lower.includes(base));
     })
     .slice(0, 4);
+}
+
+function tokenizeForMatch(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9_\u4e00-\u9fff]+/i)
+    .filter((t) => t.length > 1);
+}
+
+export function isTextLikeCodeFile(path: string): boolean {
+  const base = path.split("/").pop() ?? path;
+  if (TEXT_FILE_RE.test(base)) return true;
+  if (!base.includes(".")) return true;
+  return false;
+}
+
+export function scoreFileRelevance(path: string, userText: string, activePath: string): number {
+  const lower = userText.toLowerCase();
+  const pathLower = path.toLowerCase();
+  const base = path.split("/").pop()?.toLowerCase() ?? "";
+  let score = 0;
+
+  if (path === activePath) score += 120;
+  if (lower.includes(pathLower)) score += 90;
+  if (base && base.length > 2 && lower.includes(base.replace(/\.[^.]+$/, ""))) score += 70;
+
+  for (const token of tokenizeForMatch(userText)) {
+    if (pathLower.includes(token)) score += 12;
+  }
+
+  const activeDir = activePath.includes("/") ? activePath.slice(0, activePath.lastIndexOf("/")) : "";
+  if (activeDir && (path === activeDir || path.startsWith(`${activeDir}/`))) score += 28;
+
+  if (pathLower.includes("test") && /test|测试|spec/.test(lower)) score += 18;
+  if (pathLower.includes("index") || pathLower.endsWith("main.py") || pathLower.endsWith("app.py")) score += 8;
+
+  if (pathLower.includes("node_modules") || pathLower.includes(".git/")) score -= 1000;
+  return score;
+}
+
+/** Plan/Agent 共用：扫描项目文本文件，按与提示词的相关性读取内容 */
+export async function collectSmartContextFiles(
+  userText: string,
+  files: CodeFileEntry[],
+  activePath: string,
+  readFn: (handle: FileSystemFileHandle) => Promise<string>,
+  mode: CodeWorkflowMode
+): Promise<{ path: string; content: string }[]> {
+  const maxFiles = mode === "plan" ? 28 : 18;
+  const maxTotalBytes = mode === "plan" ? 220_000 : 140_000;
+  const minScore = mode === "plan" ? -4 : 0;
+
+  const candidates = files
+    .filter((f) => isTextLikeCodeFile(f.path))
+    .map((f) => ({ entry: f, score: scoreFileRelevance(f.path, userText, activePath) }))
+    .sort((a, b) => b.score - a.score);
+
+  let picked = candidates.filter((c) => c.score >= minScore).slice(0, maxFiles);
+  if (picked.length < 4) {
+    picked = candidates.slice(0, Math.min(maxFiles, candidates.length));
+  }
+
+  const out: { path: string; content: string }[] = [];
+  let total = 0;
+  for (const { entry } of picked) {
+    if (entry.path === activePath) continue;
+    try {
+      const fileContent = await readFn(entry.handle);
+      if (total + fileContent.length > maxTotalBytes) break;
+      out.push({ path: entry.path, content: fileContent });
+      total += fileContent.length;
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  return out;
 }

@@ -8,6 +8,7 @@ import {
   UserStudioAvatar,
 } from "@/components/chat/StudioChatAvatar";
 import { ChatMessageContent } from "@/components/chat/ChatMessageContent";
+import { MessageCopyButton } from "@/components/chat/MessageCopyButton";
 import { useStudio } from "@/context/StudioContext";
 import { useLocale } from "@/context/LocaleContext";
 
@@ -185,6 +186,11 @@ export function StudioPage() {
                         : "mimo-studio-chat-bubble-assistant"
                     }`}
                   >
+                    {m.role === "assistant" && (
+                      <div className="mb-1 flex justify-end">
+                        <MessageCopyButton text={m.content} />
+                      </div>
+                    )}
                     <ChatMessageContent text={m.content} variant={m.role === "assistant" ? "studio" : "default"} />
                   </div>
                 </article>

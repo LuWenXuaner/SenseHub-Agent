@@ -9,6 +9,7 @@ type RoleDraft = { provider: string; model: string };
 type Props = {
   variant?: "full" | "compact";
   onSaved?: () => void;
+  reloadKey?: number;
 };
 
 function draftFromConfig(cfg: ApiConfigPublic): Record<string, RoleDraft> {
@@ -29,7 +30,7 @@ function modelDisplay(
   return preset?.label || row.model;
 }
 
-export function ConsoleBrainRouting({ variant = "full", onSaved }: Props) {
+export function ConsoleBrainRouting({ variant = "full", onSaved, reloadKey = 0 }: Props) {
   const { t, locale } = useLocale();
   const k = t.apiKeys;
   const b = t.brainRouting;
@@ -68,7 +69,7 @@ export function ConsoleBrainRouting({ variant = "full", onSaved }: Props) {
 
   useEffect(() => {
     void load().catch(() => {});
-  }, [load]);
+  }, [load, reloadKey]);
 
   const providerOptions = useMemo(() => {
     const ids = new Set(providers.map((p) => p.id));
@@ -131,9 +132,14 @@ export function ConsoleBrainRouting({ variant = "full", onSaved }: Props) {
     }
   };
 
+  const providerConfigured = (providerId: string, roleName: string) => {
+    const prov = providerOptions.find((p) => p.id === providerId);
+    const roleRow = roles.find((r) => r.role === roleName);
+    return Boolean(prov?.configured || roleRow?.configured);
+  };
+
   const roleLabel = (r: RoleConfigPublic) =>
     locale === "zh" ? r.label_zh || r.role : r.label_en || r.role;
-
   const roleDesc = (r: RoleConfigPublic) =>
     locale === "zh" ? r.description_zh || r.description : r.description_en || r.description;
 
@@ -151,7 +157,7 @@ export function ConsoleBrainRouting({ variant = "full", onSaved }: Props) {
   const roleTableRows = roles.map((r) => {
     const row = draft[r.role] ?? { provider: "", model: "" };
     const prov = providerOptions.find((p) => p.id === row.provider);
-    const unconfigured = prov && !prov.configured;
+    const unconfigured = Boolean(row.provider) && !providerConfigured(row.provider, r.role);
     const presetId =
       presets.find((p) => p.provider === row.provider && p.model === row.model)?.id ?? "";
     const custom = isCustom(r.role);
@@ -239,7 +245,7 @@ export function ConsoleBrainRouting({ variant = "full", onSaved }: Props) {
   const compactRoleRows = roles.map((r) => {
     const row = draft[r.role] ?? { provider: "", model: "" };
     const prov = providerOptions.find((p) => p.id === row.provider);
-    const unconfigured = prov && !prov.configured;
+    const unconfigured = Boolean(row.provider) && !providerConfigured(row.provider, r.role);
     const presetId =
       presets.find((p) => p.provider === row.provider && p.model === row.model)?.id ?? "";
     const custom = isCustom(r.role);

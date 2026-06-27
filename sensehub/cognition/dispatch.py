@@ -34,6 +34,102 @@ _WAKE_PREFIX = re.compile(
     re.I,
 )
 
+_CONVERSATION_SYSTEM = """你是灵枢智能助手。自然、友好地回答用户问题。
+这是控制台对话模式：只输出文字答复，不调用桌面/浏览器工具。
+若用户需要实际操作电脑，可提示其用更具体的任务描述。"""
+
+
+def _is_pure_conversation(intent_raw: dict[str, Any]) -> bool:
+    mode = str(intent_raw.get("action_mode", "")).lower()
+    if mode != "answer":
+        return False
+    wants = str(intent_raw.get("user_wants", "")).lower()
+    if wants == "desktop_action":
+        return False
+    suggested = intent_raw.get("suggested_tools")
+    if isinstance(suggested, list) and suggested:
+        return False
+    intent_type = str(intent_raw.get("intent_type", "")).lower()
+    if intent_type in {"desktop", "browser", "file", "virtual"}:
+        return False
+    return True
+
+
+async def _answer_conversation(
+    text: str,
+    *,
+    history: list[dict[str, Any]] | None,
+    session_id: str,
+    intent_raw: dict[str, Any],
+    agents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    router = LLMRouter()
+    hist_block = format_history_for_brain(history)
+    user_content = f"{hist_block}\n\n用户：{text}" if hist_block else text
+    try:
+        answer = await router.chat(
+            "intent",
+            [
+                {"role": "system", "content": _CONVERSATION_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.6,
+            max_tokens=4096,
+        )
+    except Exception as exc:
+        raise BrainPipelineError(f"对话脑不可用: {exc}") from exc
+    answer = str(answer or "").strip() or "抱歉，我暂时无法回答。"
+    agents.append({"role": "conversation", "model_role": "intent", "preview": answer[:80]})
+    plan = ExecutionPlan(summary="对话", steps=[])
+    log_audit(input_text=text, action="brain_conversation", result=answer[:200])
+    return {
+        "action": "answer",
+        "matched": True,
+        "executed": True,
+        "plan": plan,
+        "step_results": [],
+        "reply": answer,
+        "agents": agents,
+        "intent_raw": intent_raw,
+        "message": answer,
+        "session_id": session_id,
+    }
+
+
+def _step_results_all_ok(results: list[Any]) -> bool:
+    if not results:
+        return False
+    for r in results:
+        ok = bool(getattr(r, "success", False)) if not isinstance(r, dict) else bool(r.get("success"))
+        if not ok:
+            return False
+    return True
+
+
+def _maybe_save_plan_cache(text: str, plan: ExecutionPlan, intent_raw: dict[str, Any] | None, results: list[Any]) -> None:
+    if not _step_results_all_ok(results):
+        return
+    from sensehub.cognition.plan_cache import save_success_plan
+
+    save_success_plan(text, plan, intent_raw)
+
+
+def _append_safety_agent(agents: list[dict[str, Any]], plan: ExecutionPlan) -> None:
+    if not plan.steps or any(a.get("role") == "safety" for a in agents):
+        return
+    from sensehub.cognition.safety import SafetyReviewer
+
+    safety = SafetyReviewer().score(plan)
+    agents.append(
+        {
+            "role": "safety",
+            "model_role": "safety",
+            "passed": safety.passed,
+            "reason": safety.reason,
+            "scores": safety.model_dump(),
+        }
+    )
+
 
 def _quick_plan_enabled() -> bool:
     val = os.getenv("SENSEHUB_ENABLE_QUICK_PLAN", "").strip().lower()
@@ -270,6 +366,7 @@ async def process_user_input(
                 "message": msg,
                 "reply": msg,
             }
+        _maybe_save_plan_cache(text, loop_out["plan"], intent_raw, loop_out.get("step_results") or [])
         return {
             "action": "execute",
             "matched": True,
@@ -322,6 +419,15 @@ async def process_user_input(
     mode = route.action_mode
     intent_raw = {**intent_raw, "action_mode": mode, "user_wants": route.user_wants}
 
+    if _is_pure_conversation(intent_raw):
+        return await _answer_conversation(
+            text,
+            history=hist,
+            session_id=str(intent_raw.get("_session_id") or session_id or ""),
+            intent_raw=intent_raw,
+            agents=agents,
+        )
+
     try:
         from sensehub.gateway.agent_service import run_agent, run_plan_agent
 
@@ -354,6 +460,7 @@ async def process_user_input(
                 intent_raw=intent_raw,
             )
         agents.extend(loop_out.get("agents") or [])
+        _append_safety_agent(agents, loop_out["plan"])
 
         if loop_out.get("needs_confirm"):
             msg = str(loop_out.get("answer") or loop_out["plan"].summary or "该操作需你确认后才会继续执行")
@@ -368,6 +475,8 @@ async def process_user_input(
             }
 
         response_action = mode if mode in ("answer", "status", "cancel") else "execute"
+        if response_action == "execute":
+            _maybe_save_plan_cache(text, loop_out["plan"], intent_raw, loop_out.get("step_results") or [])
         return {
             "action": response_action,
             "matched": True,

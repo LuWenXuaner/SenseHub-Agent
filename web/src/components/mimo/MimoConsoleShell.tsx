@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { applyStoredConsoleTheme } from "@/hooks/useGamification";
+import { applyStoredConsoleProfile, applyStoredConsoleTheme } from "@/hooks/useGamification";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/context/LocaleContext";
 import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
@@ -49,7 +49,7 @@ function ConsoleTopBar() {
         <Link to="/updates" className="hover:text-mimo-text">{t.nav.updates}</Link>
         <Link to="/contact" className="hover:text-mimo-text">{t.nav.contact}</Link>
         <Link to="/product/api" className="hover:text-mimo-text">{t.nav.docs}</Link>
-        <Link to="/console/points" className="hover:text-mimo-text">{t.nav.pricing}</Link>
+        <Link to="/models" className="hover:text-mimo-text">{t.nav.pricing}</Link>
         <LanguageSwitcher />
         <Link
           to="/console/account"
@@ -169,15 +169,16 @@ export function MimoConsoleShell() {
 
   useEffect(() => {
     applyStoredConsoleTheme();
+    applyStoredConsoleProfile();
   }, []);
 
   return (
-    <div className="mimo-product-app flex h-screen flex-col bg-[#f7f7f7]">
+    <div className="mimo-product-app mimo-console-shell flex h-screen flex-col bg-mimo-warm dark:bg-background">
       <div className="mimo-console-announce">{t.console.announce}</div>
       <ConsoleTopBar />
       <div className="flex min-h-0 flex-1">
         <ConsoleSidebar onInvite={() => setInviteOpen(true)} />
-        <main className="mimo-console-main min-h-0 flex-1 overflow-hidden">
+        <main className="mimo-console-main mimo-console-profile-surface min-h-0 flex-1 overflow-hidden">
           <Outlet />
         </main>
       </div>
